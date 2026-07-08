@@ -7,7 +7,8 @@ const state = {
   data: { settings: { currency: "₽" }, materials: [], products: [] },
   tab: "vitrina",
   vitrinaFilter: "all",
-  expanded: null, // id развёрнутой тех карты
+  stockFilter: "all",
+  stockSearch: "",
 };
 
 /* Категории изделий */
@@ -23,12 +24,67 @@ function catLabel(id) {
   return c ? c.label : id;
 }
 
+/* Группы сырья на складе */
+const MAT_GROUPS = [
+  { id: "dairy", label: "Молочка" },
+  { id: "sprinkle", label: "Посыпки" },
+  { id: "meat", label: "Мясо" },
+  { id: "veg", label: "Овощи" },
+  { id: "fruit", label: "Фрукты" },
+  { id: "topping", label: "Топпинги" },
+  { id: "greens", label: "Зелень" },
+  { id: "eggs", label: "Яйца" },
+  { id: "grocery", label: "Бакалея" },
+];
+
+const GROUP_ICONS = {
+  all: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>`,
+  dairy: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M10 2h4v4l2 4v11a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10l2-4V2z"/><path d="M8 14h8"/></svg>`,
+  sprinkle: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l1.4 3.1L16.5 7.5l-3.1 1.4L12 12l-1.4-3.1L7.5 7.5l3.1-1.4L12 3z"/><path d="M5 15v3M3.5 16.5h3M18 15v4M16 17h4"/></svg>`,
+  meat: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15.4 15.6a5.5 5.5 0 1 0-7.8-7.8c-1.6 1.6-1.9 4.3-.6 6.4l-2.7 2.7a2 2 0 1 0 2.8 2.8l2.7-2.7c2.1 1.3 4 1.2 5.6-1.4z"/></svg>`,
+  veg: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l2-6 8-8a3.5 3.5 0 0 1 5 5l-8 8-6 2-1-1z"/><path d="M14 4l3-2M17 7l3-2"/></svg>`,
+  fruit: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 8c-3-2-7 0-7 4.5 0 4 3 8.5 5 8.5 1 0 1.5-.6 2-.6s1 .6 2 .6c2 0 5-4.5 5-8.5C19 8 15 6 12 8z"/><path d="M12 8c0-2.5 1.5-4.5 3.5-5"/></svg>`,
+  topping: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3s6.5 7.5 6.5 11.5a6.5 6.5 0 0 1-13 0C5.5 10.5 12 3 12 3z"/></svg>`,
+  greens: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20C6 8 13 4 21 4c-.5 8-4 15-15 15"/><path d="M4 20c2-5 5-8 9-11"/></svg>`,
+  nf: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>`,
+  eggs: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3c3.5 0 6.5 5.5 6.5 10a6.5 6.5 0 0 1-13 0C5.5 8.5 8.5 3 12 3z"/></svg>`,
+  grocery: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M5 8h14l-1.5 12a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>`,
+};
+
+/* Автоопределение группы по названию (укр/рус). Порядок проверки важен. */
+const GROUP_KEYWORDS = [
+  ["eggs", ["яйц", "яйце", "меланж"]],
+  ["greens", ["зелен", "укроп", "кріп", "петруш", "базилік", "базилик", "тимьян", "тим'ян", "руккол", "шпинат"]],
+  ["topping", ["соус", "кетчуп", "майонез", "гірчиц", "горчиц", "повидл", "варення", "джем", "топинг", "топпинг", "згущ", "сгущ", "мед", "карамел", "заправка", "начинк", "сироп"]],
+  ["meat", ["свинин", "говяд", "ялович", "куряч", "курин", "філе", "филе", "бедр", "ковб", "колбас", "сосиск", "бекон", "шинка", "ветчин", "м'яс", "мясо", "фарш", "нагетс"]],
+  ["dairy", ["молок", "молоч", "вершк", "сливоч", "сметан", "творог", "творож", "моцарел", "кефір", "кефир", "йогурт", "маргарин", "сир"]],
+  ["sprinkle", ["кунжут", "мак ", "маков", "кранч", "пудра", "слайс", "горіх", "орех", "семя", "насіння", "посипк", "посыпк", "стружк", "мигдал", "миндал"]],
+  ["fruit", ["яблу", "яблок", "лимон", "апельсин", "банан", "родзинк", "изюм", "ягід", "ягод", "фрукт", "вишн", "полуниц", "клубник"]],
+  ["veg", ["картоп", "картоф", "капуст", "цибул", "лук", "морков", "морква", "огір", "огур", "томат", "помідор", "помидор", "часник", "чеснок", "печериц", "шампиньон", "гриб", "кукурудз", "кукуруз", "буряк", "свекл", "кабач"]],
+];
+function classifyMaterial(name) {
+  const n = String(name || "").toLowerCase();
+  for (const [group, words] of GROUP_KEYWORDS) {
+    if (words.some(w => n.includes(w))) return group;
+  }
+  return "grocery";
+}
+function matGroup(m) { return m.group || classifyMaterial(m.name); }
+function ensureGroups(data) {
+  let changed = false;
+  for (const m of data.materials) {
+    if (!m.group) { m.group = classifyMaterial(m.name); changed = true; }
+  }
+  return changed;
+}
+
 async function load() {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
       state.data = JSON.parse(raw);
       if (!state.data.settings) state.data.settings = { currency: "₽" };
+      if (ensureGroups(state.data)) save();
       return;
     }
   } catch (e) { /* повреждённые данные — начинаем заново */ }
@@ -682,29 +738,68 @@ function resizeImage(file, maxSide) {
 }
 
 /* ================== Склад сырья ================== */
-function renderStock() {
-  const items = state.data.materials;
-  const noPrice = items.filter(m => !(m.packPrice > 0)).length;
-  const list = !items.length
-    ? `<div class="empty">
-        <svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-6 9 6v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9z"/><path d="M8 21v-8h8v8"/></svg>
-        <p>Склад пуст. Добавьте первое сырьё.</p>
-        <button class="btn" data-new-material>Добавить сырьё</button>
-      </div>`
-    : (noPrice ? `<p style="color:var(--text-2);font-size:13.5px;margin:8px 2px 0">⚠ Без цены: ${noPrice} поз. — себестоимость изделий с ними будет занижена.</p>` : "") +
-      `<div class="list" style="padding-top:8px">` + items.map(m => `
-        <div class="row-card mat-row" data-edit-material="${m.id}">
-          <div class="ic">${esc((m.name.trim()[0] || "?").toUpperCase())}</div>
-          <div class="main">
-            <div class="title">${esc(m.name)}</div>
-            <div class="sub">${m.packPrice > 0
-              ? `${fmtNum(m.packQty)} ${m.unit} — ${fmtMoney(m.packPrice)} · <b>${fmtUnitPrice(m)}</b>`
-              : `<span style="color:var(--danger)">цена не указана</span>`}</div>
-          </div>
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--text-2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-        </div>`).join("") + `</div>`;
+const chevronHtml = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--text-2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>`;
 
-  return list + `
+function stockListHtml() {
+  const q = state.stockSearch.trim().toLowerCase();
+
+  if (state.stockFilter === "nf") {
+    const list = state.data.products.filter(p =>
+      p.category === "nf" && (!q || p.name.toLowerCase().includes(q)));
+    if (!list.length) return `<div class="empty" style="padding:32px 24px"><p>${q ? "Ничего не найдено" : "Полуфабрикатов пока нет — они создаются во вкладке «Тех карты» с категорией «Полуфабрикаты»"}</p></div>`;
+    return `<div class="list" style="padding-top:8px">` + list.map(p => {
+      const y = prodYield(p);
+      return `
+        <div class="row-card mat-row" data-edit-product="${p.id}">
+          <div class="ic">${GROUP_ICONS.nf}</div>
+          <div class="main">
+            <div class="title">${esc(p.name)}</div>
+            <div class="sub">выход ${fmtYield(y)} · себест. <b>${fmtPerUnit(prodUnitCost(p), y.unit)}</b></div>
+          </div>
+          ${chevronHtml}
+        </div>`;
+    }).join("") + `</div>`;
+  }
+
+  let items = state.data.materials;
+  if (state.stockFilter !== "all") items = items.filter(m => matGroup(m) === state.stockFilter);
+  if (q) items = items.filter(m => m.name.toLowerCase().includes(q));
+  if (!items.length) {
+    return `<div class="empty" style="padding:32px 24px">
+      <p>${q || state.stockFilter !== "all" ? "Ничего не найдено" : "Склад пуст. Добавьте первое сырьё."}</p>
+      ${q || state.stockFilter !== "all" ? "" : `<button class="btn" data-new-material>Добавить сырьё</button>`}
+    </div>`;
+  }
+  const noPrice = items.filter(m => !(m.packPrice > 0)).length;
+  return (noPrice ? `<p style="color:var(--text-2);font-size:13.5px;margin:8px 2px 0">⚠ Без цены: ${noPrice} поз. — себестоимость изделий с ними будет занижена.</p>` : "") +
+    `<div class="list" style="padding-top:8px">` + items.map(m => `
+      <div class="row-card mat-row" data-edit-material="${m.id}">
+        <div class="ic">${GROUP_ICONS[matGroup(m)] || GROUP_ICONS.grocery}</div>
+        <div class="main">
+          <div class="title">${esc(m.name)}</div>
+          <div class="sub">${m.packPrice > 0
+            ? `${fmtNum(m.packQty)} ${m.unit} — ${fmtMoney(m.packPrice)} · <b>${fmtUnitPrice(m)}</b>`
+            : `<span style="color:var(--danger)">цена не указана</span>`}</div>
+        </div>
+        ${chevronHtml}
+      </div>`).join("") + `</div>`;
+}
+
+function renderStock() {
+  const filters = [{ id: "all", label: "Все" }, ...MAT_GROUPS.slice(0, 7),
+    { id: "nf", label: "Полуфабрикаты" }, ...MAT_GROUPS.slice(7)];
+  const top = `
+    <div class="stock-top">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input class="input" id="stockSearch" type="search" placeholder="Поиск по сырью" value="${esc(state.stockSearch)}" autocomplete="off">
+      </div>
+      <div class="chips">
+        ${filters.map(f => `<button class="chip icon-chip ${state.stockFilter === f.id ? "is-active" : ""}" data-stock-filter="${f.id}">${GROUP_ICONS[f.id] || ""}${f.label}</button>`).join("")}
+      </div>
+    </div>`;
+
+  return top + `<div id="stockList">${stockListHtml()}</div>` + `
     <div class="backup">
       <p>Экспорт тех карт и склада</p>
       <div class="btns">
@@ -731,8 +826,9 @@ function openMaterialEditor(id) {
   const existing = id ? matById(id) : null;
   const draft = existing
     ? { ...existing }
-    : { id: uid(), name: "", unit: "г", packQty: "", packPrice: "" };
+    : { id: uid(), name: "", unit: "г", packQty: "", packPrice: "", group: null };
   const isNew = !existing;
+  if (!draft.group) draft.group = classifyMaterial(draft.name);
 
   const overlay = openSheet(`
     <div class="sheet-header"><h2>${isNew ? "Новое сырьё" : "Сырьё"}</h2>${closeBtnHtml}</div>
@@ -741,6 +837,12 @@ function openMaterialEditor(id) {
         <label for="mName">Название</label>
         <input class="input" id="mName" value="${esc(draft.name)}" placeholder="Мука пшеничная в/с" autocomplete="off">
         <div class="err" id="mNameErr" hidden>Укажите название</div>
+      </div>
+      <div class="field">
+        <label>Группа</label>
+        <div class="chips wrap" id="mGroup">
+          ${MAT_GROUPS.map(g => `<button type="button" class="chip icon-chip ${draft.group === g.id ? "is-active" : ""}" data-group="${g.id}">${GROUP_ICONS[g.id]}${g.label}</button>`).join("")}
+        </div>
       </div>
       <div class="field">
         <label for="mUnit">Единица измерения</label>
@@ -783,6 +885,22 @@ function openMaterialEditor(id) {
   $("#mUnit").addEventListener("change", updCalc);
   updCalc();
 
+  $("#mGroup").addEventListener("click", e => {
+    const b = e.target.closest("[data-group]");
+    if (!b) return;
+    draft.group = b.dataset.group;
+    $("#mGroup").querySelectorAll(".chip").forEach(x => x.classList.toggle("is-active", x === b));
+  });
+  /* при вводе названия нового сырья группа угадывается, пока не выбрана вручную */
+  let groupTouched = !isNew;
+  $("#mGroup").addEventListener("click", () => { groupTouched = true; });
+  $("#mName").addEventListener("input", () => {
+    if (groupTouched) return;
+    draft.group = classifyMaterial($("#mName").value);
+    $("#mGroup").querySelectorAll(".chip").forEach(x =>
+      x.classList.toggle("is-active", x.dataset.group === draft.group));
+  });
+
   const delBtn = $("#mDelete");
   if (delBtn) delBtn.addEventListener("click", () => {
     const used = state.data.products.filter(p => p.components.some(c => c.materialId === id));
@@ -811,7 +929,7 @@ function openMaterialEditor(id) {
     check(price > 0, "mPrice", "mPriceErr");
     if (!ok) return;
 
-    Object.assign(draft, { name, unit: $("#mUnit").value, packQty: qty, packPrice: price });
+    Object.assign(draft, { name, unit: $("#mUnit").value, packQty: qty, packPrice: price, group: draft.group || classifyMaterial(name) });
     const idx = state.data.materials.findIndex(m => m.id === draft.id);
     if (idx >= 0) state.data.materials[idx] = draft;
     else state.data.materials.push(draft);
@@ -852,6 +970,7 @@ async function importXlsx(file) {
     await loadScript("xlsx-import.js");
     const buf = await file.arrayBuffer();
     const parsed = window.parseCalcCards(buf);
+    ensureGroups(parsed);
     const nf = parsed.products.filter(p => p.category === "nf").length;
     const noPrice = parsed.materials.filter(m => !(m.packPrice > 0)).length;
     if (!confirm(
@@ -873,6 +992,7 @@ function importData(file) {
       const data = JSON.parse(reader.result);
       if (!Array.isArray(data.materials) || !Array.isArray(data.products)) throw new Error("bad format");
       if (!data.settings) data.settings = { currency: cur() };
+      ensureGroups(data);
       if (!confirm(`Заменить все текущие данные данными из файла?\n(${data.materials.length} поз. сырья, ${data.products.length} изделий)`)) return;
       state.data = data;
       save(); render();
@@ -898,6 +1018,15 @@ document.getElementById("headerAction").addEventListener("click", () => {
 document.getElementById("view").addEventListener("click", e => {
   const chip = e.target.closest(".chip[data-filter]");
   if (chip) { state.vitrinaFilter = chip.dataset.filter; render(); return; }
+
+  const sChip = e.target.closest(".chip[data-stock-filter]");
+  if (sChip) {
+    state.stockFilter = sChip.dataset.stockFilter;
+    document.querySelectorAll("[data-stock-filter]").forEach(c =>
+      c.classList.toggle("is-active", c.dataset.stockFilter === state.stockFilter));
+    document.getElementById("stockList").innerHTML = stockListHtml();
+    return;
+  }
 
   const openP = e.target.closest("[data-open-product]");
   if (openP) { openProductView(openP.dataset.openProduct); return; }
@@ -939,6 +1068,11 @@ document.getElementById("view").addEventListener("click", e => {
 });
 
 document.getElementById("view").addEventListener("input", e => {
+  if (e.target.id === "stockSearch") {
+    state.stockSearch = e.target.value;
+    document.getElementById("stockList").innerHTML = stockListHtml();
+    return;
+  }
   const inp = e.target.closest("[data-markup]");
   if (!inp) return;
   const p = productById(inp.dataset.markup);
