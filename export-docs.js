@@ -23,7 +23,7 @@ function groupedProducts() {
     if (list.length) groups.push({ label: c.label, list });
   }
   const other = items.filter(p => !CATEGORIES.some(c => c.id === p.category));
-  if (other.length) groups.push({ label: "Прочее", list: other });
+  if (other.length) groups.push({ label: "Інше", list: other });
   return groups;
 }
 
@@ -31,9 +31,9 @@ function groupedProducts() {
 function buildExcelWorkbook() {
   const c = cur();
   const aoa = [
-    [`Калькуляционные карты — ${docDateStr()}`],
+    [`Калькуляційні карти — ${docDateStr()}`],
     [],
-    ["№", "Компонент", "Ед.", "Брутто", "Нетто", `Цена, ${c}/ед`, `Сумма, ${c}`],
+    ["№", "Компонент", "Од.", "Брутто", "Нетто", `Ціна, ${c}/од`, `Сума, ${c}`],
   ];
   const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
 
@@ -44,7 +44,7 @@ function buildExcelWorkbook() {
     for (const p of g.list) {
       const y = prodYield(p);
       merges.push({ s: { r: aoa.length, c: 0 }, e: { r: aoa.length, c: 4 } });
-      aoa.push([`${p.name} — выход: ${fmtYield(y)}`]);
+      aoa.push([`${p.name} — вихід: ${fmtYield(y)}`]);
       p.components.forEach((comp, i) => {
         const ref = compRef(comp);
         if (!ref) return;
@@ -59,9 +59,9 @@ function buildExcelWorkbook() {
         ]);
       });
       const cost = productCost(p);
-      aoa.push(["", "Себестоимость", "", "", "", "", r2(cost)]);
-      aoa.push(["", "Наценка, %", "", "", "", "", Number(p.markup) || 0]);
-      aoa.push(["", "Продажная цена", "", "", "", "", salePrice(p)]);
+      aoa.push(["", "Собівартість", "", "", "", "", r2(cost)]);
+      aoa.push(["", "Націнка, %", "", "", "", "", Number(p.markup) || 0]);
+      aoa.push(["", "Ціна продажу", "", "", "", "", salePrice(p)]);
     }
   }
 
@@ -70,9 +70,9 @@ function buildExcelWorkbook() {
   ws["!merges"] = merges;
 
   const aoa2 = [
-    [`Склад сырья — ${docDateStr()}`],
+    [`Склад сировини — ${docDateStr()}`],
     [],
-    ["Название", "Ед.", "В упаковке", `Цена упаковки, ${c}`, `Цена за ед., ${c}`],
+    ["Назва", "Од.", "В упаковці", `Ціна упаковки, ${c}`, `Ціна за од., ${c}`],
   ];
   for (const m of state.data.materials) {
     aoa2.push([m.name, m.unit, m.packQty, m.packPrice, m.packQty ? Number((m.packPrice / m.packQty).toFixed(4)) : 0]);
@@ -82,7 +82,7 @@ function buildExcelWorkbook() {
   ws2["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }];
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Тех карты");
+  XLSX.utils.book_append_sheet(wb, ws, "Тех карти");
   XLSX.utils.book_append_sheet(wb, ws2, "Склад");
   return wb;
 }
@@ -96,7 +96,7 @@ function buildPdfDoc() {
   const c = cur();
   const money = n => fmtNum(n, 2).replace(/ /g, " ") + " " + c;
   const content = [
-    { text: `Калькуляционные карты`, style: "title" },
+    { text: `Калькуляційні карти`, style: "title" },
     { text: docDateStr(), style: "muted", margin: [0, 0, 0, 12] },
   ];
 
@@ -106,8 +106,8 @@ function buildPdfDoc() {
       const y = prodYield(p);
       const body = [[
         { text: "Компонент", style: "th" }, { text: "Брутто", style: "thr" },
-        { text: "Нетто", style: "thr" }, { text: `Цена, ${c}/ед`, style: "thr" },
-        { text: `Сумма, ${c}`, style: "thr" },
+        { text: "Нетто", style: "thr" }, { text: `Ціна, ${c}/од`, style: "thr" },
+        { text: `Сума, ${c}`, style: "thr" },
       ]];
       for (const comp of p.components) {
         const ref = compRef(comp);
@@ -122,11 +122,11 @@ function buildPdfDoc() {
       }
       const cost = productCost(p);
       body.push([
-        { text: "Себестоимость", bold: true }, "", "", "",
+        { text: "Собівартість", bold: true }, "", "", "",
         { text: money(cost), bold: true, alignment: "right" },
       ]);
       body.push([
-        { text: `Продажная цена (наценка ${fmtNum(p.markup, 0)}%)`, bold: true, color: "#B45309" }, "", "", "",
+        { text: `Ціна продажу (націнка ${fmtNum(p.markup, 0)}%)`, bold: true, color: "#B45309" }, "", "", "",
         { text: fmtNum(salePrice(p), 0) + " " + c, bold: true, alignment: "right", color: "#B45309" },
       ]);
 
@@ -135,7 +135,7 @@ function buildPdfDoc() {
         stack: [
           {
             table: { widths: ["*"], body: [[{
-              text: `${p.name} — выход: ${fmtYield(y)}`,
+              text: `${p.name} — вихід: ${fmtYield(y)}`,
               bold: true, color: "#000000", fontSize: 10.5,
               fillColor: "#BDE26B", margin: [6, 4, 6, 4],
             }]] },
@@ -156,11 +156,11 @@ function buildPdfDoc() {
     }
   }
 
-  content.push({ text: "Склад сырья", style: "h1", pageBreak: "before" });
+  content.push({ text: "Склад сировини", style: "h1", pageBreak: "before" });
   const matBody = [[
-    { text: "Название", style: "th" }, { text: "Ед.", style: "th" },
-    { text: "В упаковке", style: "thr" }, { text: `Цена уп., ${c}`, style: "thr" },
-    { text: `За ед., ${c}`, style: "thr" },
+    { text: "Назва", style: "th" }, { text: "Од.", style: "th" },
+    { text: "В упаковці", style: "thr" }, { text: `Ціна уп., ${c}`, style: "thr" },
+    { text: `За од., ${c}`, style: "thr" },
   ]];
   for (const m of state.data.materials) {
     const up = m.packQty ? m.packPrice / m.packQty : 0;
@@ -205,14 +205,9 @@ function exportPdfFile() {
   pdfMake.createPdf(buildPdfDoc()).download(`tehkarty-${docFileStamp()}.pdf`);
 }
 
-/* ---------- PDF витрины: только продажные цены ---------- */
-function buildVitrinaPdfDoc() {
+/* ---------- PDF меню: категорія на окремому аркуші, дві колонки, без грамовки ---------- */
+function buildMenuPdfDoc() {
   const c = cur();
-  const content = [
-    { text: "Витрина", style: "title" },
-    { text: docDateStr(), style: "muted", margin: [0, 0, 0, 12] },
-  ];
-
   const displayed = state.data.products.filter(p => p.onDisplay);
   const groups = [];
   for (const cat of CATEGORIES) {
@@ -220,64 +215,55 @@ function buildVitrinaPdfDoc() {
     if (list.length) groups.push({ label: cat.label, list });
   }
   const other = displayed.filter(p => !CATEGORIES.some(cat => cat.id === p.category));
-  if (other.length) groups.push({ label: "Прочее", list: other });
+  if (other.length) groups.push({ label: "Інше", list: other });
 
-  for (const g of groups) {
-    content.push({ text: g.label, style: "h1" });
-    const body = g.list.map(p => {
-      const y = prodYield(p);
-      const photoCell = p.photo && String(p.photo).startsWith("data:image")
-        ? { image: p.photo, fit: [46, 46], margin: [0, 2, 0, 2] }
-        : { text: "" };
-      return [
-        photoCell,
-        {
-          stack: [
-            { text: p.name, bold: true, fontSize: 11 },
-            { text: `Выход: ${fmtYield(y)}`, fontSize: 8.5, color: "#777777", margin: [0, 2, 0, 0] },
-          ],
-          margin: [0, 6, 0, 6],
-        },
-        { text: `${fmtNum(salePrice(p), 0)} ${c}`, bold: true, fontSize: 14, alignment: "right", margin: [0, 8, 0, 0] },
-      ];
-    });
+  const content = [];
+  groups.forEach((g, gi) => {
     content.push({
-      table: { widths: [54, "*", 80], body },
-      layout: {
-        hLineWidth: (i, node) => (i === 0 || i === node.table.body.length ? 0 : 0.4),
-        vLineWidth: () => 0,
-        hLineColor: () => "#CCCCCC",
-        paddingTop: () => 3, paddingBottom: () => 3,
-      },
-      margin: [0, 2, 0, 10],
+      table: { widths: ["*"], body: [[{
+        text: g.label.toUpperCase(),
+        color: "#FFFFFF", bold: true, fontSize: 24, alignment: "center",
+        fillColor: "#6B3F1D", margin: [10, 12, 10, 12],
+      }]] },
+      layout: "noBorders",
+      margin: [0, 0, 0, 20],
+      ...(gi > 0 ? { pageBreak: "before" } : {}),
     });
-  }
+    const rows = g.list.map(p => ({
+      columns: [
+        { text: p.name, bold: true, fontSize: 12 },
+        { text: `${fmtNum(salePrice(p), 0)} ${c}`, bold: true, fontSize: 12, width: "auto", color: "#6B3F1D" },
+      ],
+      columnGap: 10,
+      margin: [0, 0, 0, 11],
+    }));
+    const half = Math.ceil(rows.length / 2);
+    content.push({
+      columns: [
+        { width: "*", stack: rows.slice(0, half) },
+        { width: "*", stack: rows.slice(half) },
+      ],
+      columnGap: 28,
+    });
+  });
 
-  if (!groups.length) content.push({ text: "На витрине нет ни одного изделия", style: "muted" });
+  if (!groups.length) content.push({ text: "На вітрині немає жодного виробу", fontSize: 11, color: "#777777" });
 
   return {
     pageSize: "A4",
-    pageMargins: [36, 36, 36, 44],
-    footer: (page, pages) => ({
-      text: `${page} / ${pages}`, alignment: "center", fontSize: 8, color: "#888888", margin: [0, 14, 0, 0],
-    }),
+    pageMargins: [40, 40, 40, 40],
     content,
-    defaultStyle: { fontSize: 10, lineHeight: 1.15 },
-    styles: {
-      title: { fontSize: 16, bold: true },
-      muted: { fontSize: 9, color: "#777777" },
-      h1: { fontSize: 12, bold: true, margin: [0, 10, 0, 4] },
-    },
+    defaultStyle: { fontSize: 11, lineHeight: 1.2 },
   };
 }
 
-function exportVitrinaPdf() {
-  pdfMake.createPdf(buildVitrinaPdfDoc()).download(`vitrina-${docFileStamp()}.pdf`);
+function exportMenuPdf() {
+  pdfMake.createPdf(buildMenuPdfDoc()).download(`menu-${docFileStamp()}.pdf`);
 }
 
 window.exportExcelFile = exportExcelFile;
 window.exportPdfFile = exportPdfFile;
-window.exportVitrinaPdf = exportVitrinaPdf;
+window.exportMenuPdf = exportMenuPdf;
 window.buildExcelWorkbook = buildExcelWorkbook;
 window.buildPdfDoc = buildPdfDoc;
-window.buildVitrinaPdfDoc = buildVitrinaPdfDoc;
+window.buildMenuPdfDoc = buildMenuPdfDoc;

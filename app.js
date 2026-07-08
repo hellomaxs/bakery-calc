@@ -4,7 +4,7 @@
 const LS_KEY = "bakeryCalc:v1";
 
 const state = {
-  data: { settings: { currency: "₽" }, materials: [], products: [] },
+  data: { settings: { currency: "₴" }, materials: [], products: [] },
   tab: "vitrina",
   vitrinaFilter: "all",
   stockFilter: "all",
@@ -13,11 +13,11 @@ const state = {
 
 /* Категории изделий */
 const CATEGORIES = [
-  { id: "bakery", label: "Выпечка" },
-  { id: "fried", label: "Жареное" },
+  { id: "bakery", label: "Випічка" },
+  { id: "fried", label: "Смажене" },
   { id: "snacks", label: "Закуски" },
-  { id: "drinks", label: "Напитки" },
-  { id: "nf", label: "Полуфабрикаты" },
+  { id: "drinks", label: "Напої" },
+  { id: "nf", label: "Напівфабрикати" },
 ];
 function catLabel(id) {
   const c = CATEGORIES.find(c => c.id === id);
@@ -27,15 +27,15 @@ function catLabel(id) {
 /* Группы сырья на складе */
 const MAT_GROUPS = [
   { id: "dairy", label: "Молочка" },
-  { id: "sprinkle", label: "Посыпки" },
-  { id: "meat", label: "Мясо" },
-  { id: "veg", label: "Овощи" },
-  { id: "fruit", label: "Фрукты" },
-  { id: "topping", label: "Топпинги" },
+  { id: "sprinkle", label: "Посипки" },
+  { id: "meat", label: "М’ясо" },
+  { id: "veg", label: "Овочі" },
+  { id: "fruit", label: "Фрукти" },
+  { id: "topping", label: "Топінги" },
   { id: "greens", label: "Зелень" },
-  { id: "eggs", label: "Яйца" },
-  { id: "pack", label: "Посуда/упаковка" },
-  { id: "grocery", label: "Бакалея" },
+  { id: "eggs", label: "Яйця" },
+  { id: "pack", label: "Посуд/упаковка" },
+  { id: "grocery", label: "Бакалія" },
 ];
 
 const GROUP_ICONS = {
@@ -87,7 +87,7 @@ async function load() {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
       state.data = JSON.parse(raw);
-      if (!state.data.settings) state.data.settings = { currency: "₽" };
+      if (!state.data.settings) state.data.settings = { currency: "₴" };
       let changed = ensureGroups(state.data);
       // v2 групп: посуда/упаковка — переклассифицируем ранее авторазложенное в бакалею
       if ((state.data.settings.groupsVer || 1) < 2) {
@@ -95,6 +95,12 @@ async function load() {
           if (m.group === "grocery" && classifyMaterial(m.name) === "pack") m.group = "pack";
         }
         state.data.settings.groupsVer = 2;
+        changed = true;
+      }
+      // v2 UI: перехід на українську, валюта — гривня
+      if ((state.data.settings.uiVer || 1) < 2) {
+        state.data.settings.currency = "₴";
+        state.data.settings.uiVer = 2;
         changed = true;
       }
       if (changed) save();
@@ -114,23 +120,23 @@ function uid() {
 function seedData() {
   const m = (name, unit, packQty, packPrice) => ({ id: uid(), name, unit, packQty, packPrice });
   const mats = {
-    flour: m("Мука пшеничная в/с", "г", 1000, 60),
-    sugar: m("Сахар", "г", 1000, 75),
-    butter: m("Масло сливочное 82,5%", "г", 500, 320),
-    yeast: m("Дрожжи прессованные", "г", 100, 90),
+    flour: m("Борошно пшеничне в/г", "г", 1000, 60),
+    sugar: m("Цукор", "г", 1000, 75),
+    butter: m("Масло вершкове 82,5%", "г", 500, 320),
+    yeast: m("Дріжджі пресовані", "г", 100, 90),
     milk: m("Молоко 3,2%", "мл", 1000, 85),
-    raisin: m("Изюм", "г", 500, 180),
-    egg: m("Яйцо куриное С1", "шт", 10, 120),
-    salt: m("Соль", "г", 1000, 25),
+    raisin: m("Родзинки", "г", 500, 180),
+    egg: m("Яйце куряче С1", "шт", 10, 120),
+    salt: m("Сіль", "г", 1000, 25),
     cocoa: m("Какао-порошок", "г", 250, 210),
   };
   const c = (mat, brutto, netto) => ({ materialId: mat.id, brutto, netto });
   return {
-    settings: { currency: "₽" },
+    settings: { currency: "₴" },
     materials: Object.values(mats),
     products: [
       {
-        id: uid(), name: "Пирожок с изюмом", category: "bakery", photo: null,
+        id: uid(), name: "Пиріжок з родзинками", category: "bakery", photo: null,
         markup: 200, onDisplay: true, yieldQty: null, yieldUnit: null,
         components: [
           c(mats.flour, 55, 55), c(mats.sugar, 8, 8), c(mats.butter, 10, 10),
@@ -139,7 +145,7 @@ function seedData() {
         ],
       },
       {
-        id: uid(), name: "Какао на молоке", category: "drinks", photo: null,
+        id: uid(), name: "Какао на молоці", category: "drinks", photo: null,
         markup: 250, onDisplay: true, yieldQty: null, yieldUnit: null,
         components: [c(mats.milk, 200, 200), c(mats.cocoa, 15, 15), c(mats.sugar, 12, 12)],
       },
@@ -227,9 +233,9 @@ function salePrice(p) {
 }
 
 /* ================== Форматирование ================== */
-function cur() { return (state.data.settings && state.data.settings.currency) || "₽"; }
+function cur() { return (state.data.settings && state.data.settings.currency) || "₴"; }
 function fmtNum(n, maxDigits = 2) {
-  return Number(n || 0).toLocaleString("ru-RU", { maximumFractionDigits: maxDigits });
+  return Number(n || 0).toLocaleString("uk-UA", { maximumFractionDigits: maxDigits });
 }
 function fmtMoney(n) { return fmtNum(n, 2) + " " + cur(); }
 function fmtPerUnit(price, unit) {
@@ -283,21 +289,21 @@ function closeSheet(overlay) {
   overlay.remove();
   if (!document.querySelector(".overlay")) document.body.style.overflow = "";
 }
-const closeBtnHtml = `<button class="btn-icon subtle" data-close aria-label="Закрыть">
+const closeBtnHtml = `<button class="btn-icon subtle" data-close aria-label="Закрити">
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
 
 /* ---------- Выбор компонента: поиск + группы + алфавит ---------- */
 function openComponentPicker(excludeProductId, onPick) {
-  const filters = [{ id: "all", label: "Все" }, ...MAT_GROUPS.slice(0, 7),
-    { id: "nf", label: "Полуфабрикаты" }, ...MAT_GROUPS.slice(7)];
+  const filters = [{ id: "all", label: "Усі" }, ...MAT_GROUPS.slice(0, 7),
+    { id: "nf", label: "Напівфабрикати" }, ...MAT_GROUPS.slice(7)];
   let q = "", group = "all", letter = null;
 
   const overlay = openSheet(`
-    <div class="sheet-header"><h2>Выбор компонента</h2>${closeBtnHtml}</div>
+    <div class="sheet-header"><h2>Вибір компонента</h2>${closeBtnHtml}</div>
     <div class="sheet-body" style="min-height:min(70dvh,560px)">
       <div class="search-box">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-        <input class="input" id="cpSearch" type="search" placeholder="Поиск по складу" autocomplete="off">
+        <input class="input" id="cpSearch" type="search" placeholder="Пошук по складу" autocomplete="off">
       </div>
       <div class="chips" id="cpGroups">
         ${filters.map(f => `<button type="button" class="chip icon-chip ${f.id === "all" ? "is-active" : ""}" data-cp-group="${f.id}">${GROUP_ICONS[f.id] || ""}${f.label}</button>`).join("")}
@@ -340,9 +346,9 @@ function openComponentPicker(excludeProductId, onPick) {
           <button type="button" class="cp-item" data-cp-kind="${i.kind}" data-cp-id="${i.id}">
             <span class="ic">${i.icon}</span>
             <span class="nm">${esc(i.name)}${i.isNf ? ' <i class="nf">н/ф</i>' : ""}</span>
-            <span class="pr">${i.price > 0 ? fmtPerUnit(i.price, i.unit) : "без цены"}</span>
+            <span class="pr">${i.price > 0 ? fmtPerUnit(i.price, i.unit) : "без ціни"}</span>
           </button>`).join("")
-      : `<p style="color:var(--text-2);text-align:center;padding:24px 0">Ничего не найдено</p>`;
+      : `<p style="color:var(--text-2);text-align:center;padding:24px 0">Нічого не знайдено</p>`;
   }
   rerender();
   $("#cpSearch").focus();
@@ -394,7 +400,7 @@ document.getElementById("themeToggle").addEventListener("click", () => {
 });
 
 /* ================== Вкладки ================== */
-const TAB_TITLES = { vitrina: "Витрина", cards: "Тех карты", stock: "Склад сырья" };
+const TAB_TITLES = { vitrina: "Вітрина", cards: "Тех карти", stock: "Склад сировини" };
 
 function switchTab(tab) {
   state.tab = tab;
@@ -425,7 +431,7 @@ function renderVitrina() {
 
   const chips = `
     <div class="chips" role="tablist">
-      <button class="chip ${state.vitrinaFilter === "all" ? "is-active" : ""}" data-filter="all">Все</button>
+      <button class="chip ${state.vitrinaFilter === "all" ? "is-active" : ""}" data-filter="all">Усі</button>
       ${cats.map(c => `<button class="chip ${state.vitrinaFilter === c.id ? "is-active" : ""}" data-filter="${c.id}">${c.label}</button>`).join("")}
     </div>`;
 
@@ -433,14 +439,14 @@ function renderVitrina() {
     return chips + `
       <div class="empty">
         ${placeholderSvg("bakery", 56)}
-        <p>На витрине пока пусто.<br>Отметьте изделия «На витрину» во вкладке «Тех карты».</p>
+        <p>На вітрині поки порожньо.<br>Позначте вироби «На вітрину» у вкладці «Тех карти».</p>
       </div>`;
   }
 
   const printBtn = `
     <button class="btn ghost small block print-btn" data-print-vitrina>
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8V3h10v5"/><path d="M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="7" y="14" width="10" height="7"/></svg>
-      РАСПЕЧАТАТЬ
+      ДРУК МЕНЮ
     </button>`;
 
   return chips + printBtn + `<div class="grid">` + items.map(p => {
@@ -481,10 +487,10 @@ function openProductView(id) {
       ${photo}
       <div class="pv-meta">
         <span class="price">${fmtNum(salePrice(p), 0)} ${cur()}</span>
-        <span class="weight">Выход: ${fmtYield(w)}</span>
+        <span class="weight">Вихід: ${fmtYield(w)}</span>
       </div>
-      <div class="section-title">Состав (технологическая карта)</div>
-      <div class="ingr-list">${ingredients || '<div class="ing"><span>Состав не заполнен</span></div>'}</div>
+      <div class="section-title">Склад (технологічна карта)</div>
+      <div class="ingr-list">${ingredients || '<div class="ing"><span>Склад не заповнений</span></div>'}</div>
       <div style="height:20px"></div>
     </div>`);
 }
@@ -495,8 +501,8 @@ function renderCards() {
   if (!items.length) {
     return `<div class="empty">
       ${placeholderSvg("bakery", 56)}
-      <p>Пока нет ни одной тех карты.</p>
-      <button class="btn" data-new-product>Добавить изделие</button>
+      <p>Поки немає жодної тех карти.</p>
+      <button class="btn" data-new-product>Додати виріб</button>
     </div>`;
   }
   /* группируем по категориям в порядке CATEGORIES */
@@ -528,17 +534,17 @@ function renderCards() {
           ${photo}
           <div class="main">
             <div class="title">${esc(p.name)}</div>
-            <div class="sub">Выход <b>${fmtYield(w)}</b> · Себест. <b>${fmtMoney(cost)}</b></div>
+            <div class="sub">Вихід <b>${fmtYield(w)}</b> · Собів. <b>${fmtMoney(cost)}</b></div>
           </div>
           <label class="switch" data-stop>
-            <input type="checkbox" data-toggle-display="${p.id}" ${p.onDisplay ? "checked" : ""} aria-label="Выставить на витрину">
+            <input type="checkbox" data-toggle-display="${p.id}" ${p.onDisplay ? "checked" : ""} aria-label="Виставити на вітрину">
             <span class="track"></span>
           </label>
         </div>
         <div class="tgrid">
-          ${rows || '<p style="color:var(--text-2);font-size:13px;margin:6px 0">Состав не заполнен</p>'}
+          ${rows || '<p style="color:var(--text-2);font-size:13px;margin:6px 0">Склад не заповнений</p>'}
           <div class="trow total">
-            <span>Итого</span>
+            <span>Разом</span>
             <span></span>
             <span>${fmtYield(w)}</span>
             <span></span>
@@ -546,8 +552,8 @@ function renderCards() {
           </div>
         </div>
         <div class="tc-foot">
-          <label class="markup-inline">Наценка
-            <input class="input mk" data-markup="${p.id}" inputmode="numeric" value="${Number(p.markup) || 0}" aria-label="Наценка, %"> %
+          <label class="markup-inline">Націнка
+            <input class="input mk" data-markup="${p.id}" inputmode="numeric" value="${Number(p.markup) || 0}" aria-label="Націнка, %"> %
           </label>
           <span class="sale">${fmtNum(salePrice(p), 0)} ${cur()}</span>
         </div>
@@ -556,14 +562,14 @@ function renderCards() {
 
   let html = `
     <div class="cols-head">
-      <span>Компонент</span><span>Брутто</span><span>Нетто</span><span>Цена, ${cur()}</span><span>Сумма, ${cur()}</span>
+      <span>Компонент</span><span>Брутто</span><span>Нетто</span><span>Ціна, ${cur()}</span><span>Сума, ${cur()}</span>
     </div>`;
   for (const g of groups) {
     html += `<div class="section-title">${g.label}</div>`;
     html += `<div class="list">` + items.filter(p => p.category === g.id).map(renderItem).join("") + `</div>`;
   }
   if (ungrouped.length) {
-    html += `<div class="section-title">Прочее</div><div class="list">` + ungrouped.map(renderItem).join("") + `</div>`;
+    html += `<div class="section-title">Інше</div><div class="list">` + ungrouped.map(renderItem).join("") + `</div>`;
   }
   return html;
 }
@@ -577,21 +583,21 @@ function openProductEditor(id) {
   const isNew = !existing;
 
   if (!state.data.materials.length) {
-    toast("Сначала добавьте сырьё на склад");
+    toast("Спочатку додайте сировину на склад");
     switchTab("stock");
     return;
   }
 
   const overlay = openSheet(`
-    <div class="sheet-header"><h2>${isNew ? "Новое изделие" : "Изделие"}</h2>${closeBtnHtml}</div>
+    <div class="sheet-header"><h2>${isNew ? "Новий виріб" : "Виріб"}</h2>${closeBtnHtml}</div>
     <div class="sheet-body">
       <div class="field">
-        <label for="pName">Название</label>
-        <input class="input" id="pName" value="${esc(draft.name)}" placeholder="Пирожок с изюмом" autocomplete="off">
-        <div class="err" id="pNameErr" hidden>Укажите название изделия</div>
+        <label for="pName">Назва</label>
+        <input class="input" id="pName" value="${esc(draft.name)}" placeholder="Пиріжок з родзинками" autocomplete="off">
+        <div class="err" id="pNameErr" hidden>Вкажіть назву виробу</div>
       </div>
       <div class="field">
-        <label>Категория</label>
+        <label>Категорія</label>
         <div class="chips wrap" id="pCat">
           ${CATEGORIES.map(c => `<button type="button" class="chip ${draft.category === c.id ? "is-active" : ""}" data-cat="${c.id}">${c.label}</button>`).join("")}
         </div>
@@ -601,19 +607,19 @@ function openProductEditor(id) {
         <div class="photo-edit">
           <span id="pPhotoBox"></span>
           <div style="display:flex;flex-direction:column;gap:8px">
-            <button type="button" class="btn ghost small" id="pPhotoBtn">Выбрать фото</button>
-            <button type="button" class="btn danger small" id="pPhotoDel" ${draft.photo ? "" : "hidden"}>Убрать</button>
+            <button type="button" class="btn ghost small" id="pPhotoBtn">Обрати фото</button>
+            <button type="button" class="btn danger small" id="pPhotoDel" ${draft.photo ? "" : "hidden"}>Прибрати</button>
           </div>
           <input type="file" id="pPhotoInput" accept="image/*" hidden>
         </div>
       </div>
 
-      <div class="section-title">Состав (тех карта)</div>
+      <div class="section-title">Склад (тех карта)</div>
       <div id="compList"></div>
-      <button type="button" class="btn ghost small block" id="addComp">+ Добавить компонент</button>
+      <button type="button" class="btn ghost small block" id="addComp">+ Додати компонент</button>
 
       <div class="field" style="margin-top:16px">
-        <label>Выход изделия</label>
+        <label>Вихід виробу</label>
         <div class="form-row">
           <div class="field" style="margin:0">
             <input class="input" id="pYieldQty" inputmode="decimal" value="${draft.yieldQty ?? ""}" placeholder="авто">
@@ -624,25 +630,25 @@ function openProductEditor(id) {
             </select>
           </div>
         </div>
-        <div class="hint">Пусто — считается автоматически из суммы нетто</div>
+        <div class="hint">Порожньо — рахується автоматично із суми нетто</div>
       </div>
 
-      <div class="section-title">Калькуляция</div>
+      <div class="section-title">Калькуляція</div>
       <div class="totals" id="totalsBox"></div>
 
       <div class="field" style="margin-top:14px">
         <label class="switch">
           <input type="checkbox" id="pDisplay" ${draft.onDisplay ? "checked" : ""}>
           <span class="track"></span>
-          <span class="lbl" style="font-size:14.5px;color:var(--text)">Выставить на витрину</span>
+          <span class="lbl" style="font-size:14.5px;color:var(--text)">Виставити на вітрину</span>
         </label>
       </div>
-      ${isNew ? "" : `<button type="button" class="btn danger block" id="pDelete" style="margin:6px 0 10px">Удалить изделие</button>`}
+      ${isNew ? "" : `<button type="button" class="btn danger block" id="pDelete" style="margin:6px 0 10px">Видалити виріб</button>`}
       <div style="height:8px"></div>
     </div>
     <div class="sheet-footer">
-      <button class="btn ghost" data-close>Отмена</button>
-      <button class="btn" id="pSave">Сохранить</button>
+      <button class="btn ghost" data-close>Скасувати</button>
+      <button class="btn" id="pSave">Зберегти</button>
     </div>`);
 
   const $ = sel => overlay.querySelector(sel);
@@ -665,21 +671,21 @@ function openProductEditor(id) {
   function renderComps() {
     const box = $("#compList");
     if (!draft.components.length) {
-      box.innerHTML = `<p style="color:var(--text-2);font-size:14px;margin:4px 2px 12px">Добавьте компоненты — сырьё со склада или готовые полуфабрикаты. Себестоимость посчитается автоматически.</p>`;
+      box.innerHTML = `<p style="color:var(--text-2);font-size:14px;margin:4px 2px 12px">Додайте компоненти — сировину зі складу або готові напівфабрикати. Собівартість порахується автоматично.</p>`;
       return;
     }
     box.innerHTML = draft.components.map((comp, i) => {
       const ref = compRef(comp, new Set([draft.id]));
       const unit = ref ? ref.unit : "";
-      const nettoLabel = unit === "шт" ? "Нетто (вес), г" : `Нетто, ${unit}`;
+      const nettoLabel = unit === "шт" ? "Нетто (вага), г" : `Нетто, ${unit}`;
       return `
         <div class="comp-row" data-i="${i}">
           <div class="top">
-            <button type="button" class="input comp-pick" data-pick aria-label="Сменить компонент">
-              <span class="nm">${ref ? esc(ref.name) : "Выбрать компонент"}</span>
+            <button type="button" class="input comp-pick" data-pick aria-label="Змінити компонент">
+              <span class="nm">${ref ? esc(ref.name) : "Обрати компонент"}</span>
               <span class="pr">${ref ? fmtPerUnit(ref.unitPrice, ref.unit) : ""}</span>
             </button>
-            <button type="button" class="del" data-del-comp aria-label="Удалить компонент">
+            <button type="button" class="del" data-del-comp aria-label="Видалити компонент">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V7h10z"/></svg>
             </button>
           </div>
@@ -693,7 +699,7 @@ function openProductEditor(id) {
               <input class="input" data-f="netto" inputmode="decimal" value="${comp.netto ?? ""}" placeholder="${unit === "шт" ? "0" : (comp.brutto ?? "0")}">
             </div>
           </div>
-          <div class="cost">Сумма: <b>${fmtMoney(compCost(comp, new Set([draft.id])))}</b></div>
+          <div class="cost">Сума: <b>${fmtMoney(compCost(comp, new Set([draft.id])))}</b></div>
         </div>`;
     }).join("");
   }
@@ -705,16 +711,16 @@ function openProductEditor(id) {
     const exact = cost * (1 + draft.markup / 100);
     const sale = Math.ceil(exact);
     $("#totalsBox").innerHTML = `
-      <div class="line"><span>Себестоимость</span><span class="val">${fmtMoney(cost)}</span></div>
-      <div class="line"><span>Выход</span><span class="val">${fmtYield(y)}</span></div>
+      <div class="line"><span>Собівартість</span><span class="val">${fmtMoney(cost)}</span></div>
+      <div class="line"><span>Вихід</span><span class="val">${fmtYield(y)}</span></div>
       <div class="line" style="padding-top:8px">
-        <span>Наценка, %</span>
+        <span>Націнка, %</span>
         <span class="markup-field">
           <input class="input" id="pMarkup" inputmode="numeric" value="${draft.markup}">
         </span>
       </div>
-      <div class="line sale"><span>Продажная цена</span><span class="val">${fmtNum(sale, 0)} ${cur()}</span></div>
-      ${Math.abs(sale - exact) > 0.005 ? `<div class="line" style="padding:0"><span style="font-size:12.5px;color:var(--text-2)">точно: ${fmtMoney(exact)}, округлено вверх</span><span></span></div>` : ""}`;
+      <div class="line sale"><span>Ціна продажу</span><span class="val">${fmtNum(sale, 0)} ${cur()}</span></div>
+      ${Math.abs(sale - exact) > 0.005 ? `<div class="line" style="padding:0"><span style="font-size:12.5px;color:var(--text-2)">точно: ${fmtMoney(exact)}, округлено вгору</span><span></span></div>` : ""}`;
     $("#pMarkup").addEventListener("input", e => {
       draft.markup = parseNum(e.target.value);
       $("#totalsBox .sale .val").textContent = fmtNum(Math.ceil(draftCost() * (1 + draft.markup / 100)), 0) + " " + cur();
@@ -746,7 +752,7 @@ function openProductEditor(id) {
     try {
       draft.photo = await resizeImage(file, 640);
       renderPhoto();
-    } catch { toast("Не удалось загрузить фото"); }
+    } catch { toast("Не вдалося завантажити фото"); }
     e.target.value = "";
   });
 
@@ -798,13 +804,13 @@ function openProductEditor(id) {
   if (delBtn) delBtn.addEventListener("click", () => {
     const usedIn = state.data.products.filter(o => o.id !== id && o.components.some(c => c.productId === id));
     const warn = usedIn.length
-      ? `\n\nИспользуется как компонент в: ${usedIn.map(o => o.name).join(", ")} — будет удалено из их состава.`
+      ? `\n\nВикористовується як компонент у: ${usedIn.map(o => o.name).join(", ")} — буде видалено з їх складу.`
       : "";
-    if (!confirm(`Удалить «${draft.name}»?${warn}`)) return;
+    if (!confirm(`Видалити «${draft.name}»?${warn}`)) return;
     state.data.products = state.data.products.filter(p => p.id !== id);
     state.data.products.forEach(o => { o.components = o.components.filter(c => c.productId !== id); });
     save(); closeSheet(overlay); render();
-    toast("Изделие удалено");
+    toast("Виріб видалено");
   });
 
   // Сохранение
@@ -840,7 +846,7 @@ function openProductEditor(id) {
     else state.data.products.push(draft);
     save(); closeSheet(overlay);
     render();
-    toast(isNew ? "Изделие добавлено" : "Сохранено");
+    toast(isNew ? "Виріб додано" : "Збережено");
   });
 }
 
@@ -871,7 +877,7 @@ function stockListHtml() {
   if (state.stockFilter === "nf") {
     const list = state.data.products.filter(p =>
       p.category === "nf" && (!q || p.name.toLowerCase().includes(q)));
-    if (!list.length) return `<div class="empty" style="padding:32px 24px"><p>${q ? "Ничего не найдено" : "Полуфабрикатов пока нет — они создаются во вкладке «Тех карты» с категорией «Полуфабрикаты»"}</p></div>`;
+    if (!list.length) return `<div class="empty" style="padding:32px 24px"><p>${q ? "Нічого не знайдено" : "Напівфабрикатів поки немає — вони створюються у вкладці «Тех карти» з категорією «Напівфабрикати»"}</p></div>`;
     return `<div class="list" style="padding-top:8px">` + list.map(p => {
       const y = prodYield(p);
       return `
@@ -879,7 +885,7 @@ function stockListHtml() {
           <div class="ic">${GROUP_ICONS.nf}</div>
           <div class="main">
             <div class="title">${esc(p.name)}</div>
-            <div class="sub">выход ${fmtYield(y)} · себест. <b>${fmtPerUnit(prodUnitCost(p), y.unit)}</b></div>
+            <div class="sub">вихід ${fmtYield(y)} · собів. <b>${fmtPerUnit(prodUnitCost(p), y.unit)}</b></div>
           </div>
           ${chevronHtml}
         </div>`;
@@ -891,12 +897,12 @@ function stockListHtml() {
   if (q) items = items.filter(m => m.name.toLowerCase().includes(q));
   if (!items.length) {
     return `<div class="empty" style="padding:32px 24px">
-      <p>${q || state.stockFilter !== "all" ? "Ничего не найдено" : "Склад пуст. Добавьте первое сырьё."}</p>
-      ${q || state.stockFilter !== "all" ? "" : `<button class="btn" data-new-material>Добавить сырьё</button>`}
+      <p>${q || state.stockFilter !== "all" ? "Нічого не знайдено" : "Склад порожній. Додайте першу сировину."}</p>
+      ${q || state.stockFilter !== "all" ? "" : `<button class="btn" data-new-material>Додати сировину</button>`}
     </div>`;
   }
   const noPrice = items.filter(m => !(m.packPrice > 0)).length;
-  return (noPrice ? `<p style="color:var(--text-2);font-size:13.5px;margin:8px 2px 0">⚠ Без цены: ${noPrice} поз. — себестоимость изделий с ними будет занижена.</p>` : "") +
+  return (noPrice ? `<p style="color:var(--text-2);font-size:13.5px;margin:8px 2px 0">⚠ Без ціни: ${noPrice} поз. — собівартість виробів з ними буде занижена.</p>` : "") +
     `<div class="list" style="padding-top:8px">` + items.map(m => `
       <div class="row-card mat-row" data-edit-material="${m.id}">
         <div class="ic">${GROUP_ICONS[matGroup(m)] || GROUP_ICONS.grocery}</div>
@@ -904,20 +910,20 @@ function stockListHtml() {
           <div class="title">${esc(m.name)}</div>
           <div class="sub">${m.packPrice > 0
             ? `${fmtNum(m.packQty)} ${m.unit} — ${fmtMoney(m.packPrice)} · <b>${fmtUnitPrice(m)}</b>`
-            : `<span style="color:var(--danger)">цена не указана</span>`}</div>
+            : `<span style="color:var(--danger)">ціна не вказана</span>`}</div>
         </div>
         ${chevronHtml}
       </div>`).join("") + `</div>`;
 }
 
 function renderStock() {
-  const filters = [{ id: "all", label: "Все" }, ...MAT_GROUPS.slice(0, 7),
-    { id: "nf", label: "Полуфабрикаты" }, ...MAT_GROUPS.slice(7)];
+  const filters = [{ id: "all", label: "Усі" }, ...MAT_GROUPS.slice(0, 7),
+    { id: "nf", label: "Напівфабрикати" }, ...MAT_GROUPS.slice(7)];
   const top = `
     <div class="stock-top">
       <div class="search-box">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-        <input class="input" id="stockSearch" type="search" placeholder="Поиск по сырью" value="${esc(state.stockSearch)}" autocomplete="off">
+        <input class="input" id="stockSearch" type="search" placeholder="Пошук по сировині" value="${esc(state.stockSearch)}" autocomplete="off">
       </div>
       <div class="chips">
         ${filters.map(f => `<button class="chip icon-chip ${state.stockFilter === f.id ? "is-active" : ""}" data-stock-filter="${f.id}">${GROUP_ICONS[f.id] || ""}${f.label}</button>`).join("")}
@@ -926,20 +932,20 @@ function renderStock() {
 
   return top + `<div id="stockList">${stockListHtml()}</div>` + `
     <div class="backup">
-      <p>Экспорт тех карт и склада</p>
+      <p>Експорт тех карт і складу</p>
       <div class="btns">
         <button class="btn ghost small" data-export-xlsx>Excel</button>
         <button class="btn ghost small" data-export-pdf>PDF</button>
         <button class="btn ghost small" data-export>JSON</button>
       </div>
-      <p style="margin-top:14px">Импорт</p>
+      <p style="margin-top:14px">Імпорт</p>
       <div class="btns">
-        <button class="btn ghost small" data-import-xlsx>Из Excel</button>
-        <button class="btn ghost small" data-import>Из JSON</button>
+        <button class="btn ghost small" data-import-xlsx>З Excel</button>
+        <button class="btn ghost small" data-import>З JSON</button>
       </div>
-      <p style="margin-top:14px">Данные хранятся на этом устройстве · Валюта:
+      <p style="margin-top:14px">Дані зберігаються на цьому пристрої · Валюта:
         <select id="curSelect" style="border:0;background:none;color:var(--primary);font-weight:600">
-          ${["₽", "₴", "€", "$", "₸"].map(c => `<option value="${c}" ${cur() === c ? "selected" : ""}>${c}</option>`).join("")}
+          ${["₴", "₽", "€", "$", "₸"].map(c => `<option value="${c}" ${cur() === c ? "selected" : ""}>${c}</option>`).join("")}
         </select>
       </p>
       <input type="file" id="importInput" accept="application/json,.json" hidden>
@@ -956,44 +962,44 @@ function openMaterialEditor(id) {
   if (!draft.group) draft.group = classifyMaterial(draft.name);
 
   const overlay = openSheet(`
-    <div class="sheet-header"><h2>${isNew ? "Новое сырьё" : "Сырьё"}</h2>${closeBtnHtml}</div>
+    <div class="sheet-header"><h2>${isNew ? "Нова сировина" : "Сировина"}</h2>${closeBtnHtml}</div>
     <div class="sheet-body">
       <div class="field">
-        <label for="mName">Название</label>
-        <input class="input" id="mName" value="${esc(draft.name)}" placeholder="Мука пшеничная в/с" autocomplete="off">
-        <div class="err" id="mNameErr" hidden>Укажите название</div>
+        <label for="mName">Назва</label>
+        <input class="input" id="mName" value="${esc(draft.name)}" placeholder="Борошно пшеничне в/г" autocomplete="off">
+        <div class="err" id="mNameErr" hidden>Вкажіть назву</div>
       </div>
       <div class="field">
-        <label>Группа</label>
+        <label>Група</label>
         <div class="chips wrap" id="mGroup">
           ${MAT_GROUPS.map(g => `<button type="button" class="chip icon-chip ${draft.group === g.id ? "is-active" : ""}" data-group="${g.id}">${GROUP_ICONS[g.id]}${g.label}</button>`).join("")}
         </div>
       </div>
       <div class="field">
-        <label for="mUnit">Единица измерения</label>
+        <label for="mUnit">Одиниця виміру</label>
         <select class="input" id="mUnit">
-          ${[["г", "граммы (г)"], ["кг", "килограммы (кг)"], ["мл", "миллилитры (мл)"], ["л", "литры (л)"], ["шт", "штуки (шт)"]]
+          ${[["г", "грами (г)"], ["кг", "кілограми (кг)"], ["мл", "мілілітри (мл)"], ["л", "літри (л)"], ["шт", "штуки (шт)"]]
             .map(([v, t]) => `<option value="${v}" ${draft.unit === v ? "selected" : ""}>${t}</option>`).join("")}
         </select>
       </div>
       <div class="form-row">
         <div class="field">
-          <label for="mQty">Кол-во в упаковке</label>
+          <label for="mQty">К-сть в упаковці</label>
           <input class="input" id="mQty" inputmode="decimal" value="${draft.packQty}" placeholder="1000">
-          <div class="err" id="mQtyErr" hidden>Больше нуля</div>
+          <div class="err" id="mQtyErr" hidden>Більше нуля</div>
         </div>
         <div class="field">
-          <label for="mPrice">Цена упаковки, ${cur()}</label>
+          <label for="mPrice">Ціна упаковки, ${cur()}</label>
           <input class="input" id="mPrice" inputmode="decimal" value="${draft.packPrice}" placeholder="60">
-          <div class="err" id="mPriceErr" hidden>Больше нуля</div>
+          <div class="err" id="mPriceErr" hidden>Більше нуля</div>
         </div>
       </div>
       <p class="hint" id="mCalc" style="font-size:14px;color:var(--text-2);margin:0 2px 14px"></p>
-      ${isNew ? "" : `<button type="button" class="btn danger block" id="mDelete" style="margin:2px 0 10px">Удалить сырьё</button>`}
+      ${isNew ? "" : `<button type="button" class="btn danger block" id="mDelete" style="margin:2px 0 10px">Видалити сировину</button>`}
     </div>
     <div class="sheet-footer">
-      <button class="btn ghost" data-close>Отмена</button>
-      <button class="btn" id="mSave">Сохранить</button>
+      <button class="btn ghost" data-close>Скасувати</button>
+      <button class="btn" id="mSave">Зберегти</button>
     </div>`);
 
   const $ = sel => overlay.querySelector(sel);
@@ -1003,7 +1009,7 @@ function openMaterialEditor(id) {
     const price = parseNum($("#mPrice").value);
     const unit = $("#mUnit").value;
     $("#mCalc").textContent = qty > 0 && price > 0
-      ? `Цена за единицу: ${fmtPerUnit(price / qty, unit)}`
+      ? `Ціна за одиницю: ${fmtPerUnit(price / qty, unit)}`
       : "";
   }
   ["mQty", "mPrice"].forEach(fid => $("#" + fid).addEventListener("input", updCalc));
@@ -1030,13 +1036,13 @@ function openMaterialEditor(id) {
   if (delBtn) delBtn.addEventListener("click", () => {
     const used = state.data.products.filter(p => p.components.some(c => c.materialId === id));
     const warn = used.length
-      ? `\n\nИспользуется в ${used.length} изделиях (${used.map(p => p.name).join(", ")}) — компонент будет удалён из их состава.`
+      ? `\n\nВикористовується у ${used.length} виробах (${used.map(p => p.name).join(", ")}) — компонент буде видалено з їх складу.`
       : "";
-    if (!confirm(`Удалить «${draft.name}»?${warn}`)) return;
+    if (!confirm(`Видалити «${draft.name}»?${warn}`)) return;
     state.data.materials = state.data.materials.filter(m => m.id !== id);
     state.data.products.forEach(p => { p.components = p.components.filter(c => c.materialId !== id); });
     save(); closeSheet(overlay); render();
-    toast("Сырьё удалено");
+    toast("Сировину видалено");
   });
 
   $("#mSave").addEventListener("click", () => {
@@ -1059,7 +1065,7 @@ function openMaterialEditor(id) {
     if (idx >= 0) state.data.materials[idx] = draft;
     else state.data.materials.push(draft);
     save(); closeSheet(overlay); render();
-    toast(isNew ? "Сырьё добавлено" : "Сохранено");
+    toast(isNew ? "Сировину додано" : "Збережено");
   });
 }
 
@@ -1072,7 +1078,7 @@ function exportData() {
   a.download = `pekarnya-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
-  toast("Файл с данными сохранён");
+  toast("Файл з даними збережено");
 }
 const loadedScripts = {};
 function loadScript(src) {
@@ -1099,14 +1105,14 @@ async function importXlsx(file) {
     const nf = parsed.products.filter(p => p.category === "nf").length;
     const noPrice = parsed.materials.filter(m => !(m.packPrice > 0)).length;
     if (!confirm(
-      `Найдено: ${parsed.products.length} изделий (из них ${nf} полуфабрикатов), ` +
-      `${parsed.materials.length} позиций сырья${noPrice ? `, без цены: ${noPrice}` : ""}.\n\n` +
-      `Заменить все текущие данные? Фото и цены, введённые вручную, будут потеряны.`)) return;
+      `Знайдено: ${parsed.products.length} виробів (з них ${nf} напівфабрикатів), ` +
+      `${parsed.materials.length} позицій сировини${noPrice ? `, без ціни: ${noPrice}` : ""}.\n\n` +
+      `Замінити всі поточні дані? Фото і ціни, введені вручну, буде втрачено.`)) return;
     state.data = { settings: state.data.settings, ...parsed };
     save(); render();
-    toast("Тех карты загружены из Excel");
+    toast("Тех карти завантажено з Excel");
   } catch (e) {
-    toast("Не удалось разобрать файл — нужен Excel с калькуляционными картами");
+    toast("Не вдалося розібрати файл — потрібен Excel з калькуляційними картами");
   }
 }
 
@@ -1118,12 +1124,12 @@ function importData(file) {
       if (!Array.isArray(data.materials) || !Array.isArray(data.products)) throw new Error("bad format");
       if (!data.settings) data.settings = { currency: cur() };
       ensureGroups(data);
-      if (!confirm(`Заменить все текущие данные данными из файла?\n(${data.materials.length} поз. сырья, ${data.products.length} изделий)`)) return;
+      if (!confirm(`Замінити всі поточні дані даними з файлу?\n(${data.materials.length} поз. сировини, ${data.products.length} виробів)`)) return;
       state.data = data;
       save(); render();
-      toast("Данные импортированы");
+      toast("Дані імпортовано");
     } catch {
-      toast("Не удалось прочитать файл — это не резервная копия приложения");
+      toast("Не вдалося прочитати файл — це не резервна копія застосунку");
     }
   };
   reader.readAsText(file);
@@ -1172,29 +1178,29 @@ document.getElementById("view").addEventListener("click", e => {
 
   if (e.target.closest("[data-export]")) { exportData(); return; }
   if (e.target.closest("[data-export-xlsx]")) {
-    toast("Готовлю Excel…");
+    toast("Готую Excel…");
     loadScript("vendor/xlsx.full.min.js")
       .then(() => loadScript("export-docs.js"))
       .then(() => window.exportExcelFile())
-      .catch(() => toast("Нет сети — попробуйте позже"));
+      .catch(() => toast("Немає мережі — спробуйте пізніше"));
     return;
   }
   if (e.target.closest("[data-print-vitrina]")) {
-    toast("Готовлю PDF витрины…");
+    toast("Готую PDF меню…");
     loadScript("vendor/pdfmake.min.js")
       .then(() => loadScript("vendor/vfs_fonts.js"))
       .then(() => loadScript("export-docs.js"))
-      .then(() => window.exportVitrinaPdf())
-      .catch(() => toast("Нет сети — попробуйте позже"));
+      .then(() => window.exportMenuPdf())
+      .catch(() => toast("Немає мережі — спробуйте пізніше"));
     return;
   }
   if (e.target.closest("[data-export-pdf]")) {
-    toast("Готовлю PDF…");
+    toast("Готую PDF…");
     loadScript("vendor/pdfmake.min.js")
       .then(() => loadScript("vendor/vfs_fonts.js"))
       .then(() => loadScript("export-docs.js"))
       .then(() => window.exportPdfFile())
-      .catch(() => toast("Нет сети — попробуйте позже"));
+      .catch(() => toast("Немає мережі — спробуйте пізніше"));
     return;
   }
   if (e.target.closest("[data-import]")) { document.getElementById("importInput").click(); return; }
@@ -1224,7 +1230,7 @@ document.getElementById("view").addEventListener("change", e => {
     if (p) {
       p.onDisplay = toggle.checked;
       save();
-      toast(p.onDisplay ? "Выставлено на витрину" : "Убрано с витрины");
+      toast(p.onDisplay ? "Виставлено на вітрину" : "Прибрано з вітрини");
     }
     return;
   }

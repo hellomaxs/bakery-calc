@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="ru">
+<html lang="uk">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Пекарня · Калькулятор</title>
-<meta name="description" content="Калькулятор продажной стоимости изделий пекарни: витрина, тех карты, склад сырья">
+<meta name="description" content="Калькулятор продажної вартості виробів пекарні: вітрина, тех карти, склад сировини">
 <meta name="theme-color" content="#B45309">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
@@ -18,10 +18,10 @@
 <body>
 
 <header class="app-header">
-  <h1 id="pageTitle">Витрина</h1>
+  <h1 id="pageTitle">Вітрина</h1>
   <div class="header-actions">
-  <button id="themeToggle" class="btn-icon subtle" hidden aria-label="Переключить тему"></button>
-  <button id="headerAction" class="btn-icon" hidden aria-label="Добавить">
+  <button id="themeToggle" class="btn-icon subtle" hidden aria-label="Перемкнути тему"></button>
+  <button id="headerAction" class="btn-icon" hidden aria-label="Додати">
     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
   </button>
   </div>
@@ -29,16 +29,16 @@
 
 <main id="view" class="view" tabindex="-1"></main>
 
-<nav class="tabbar" aria-label="Основная навигация">
-  <button class="tab is-active" data-tab="vitrina" aria-label="Витрина">
+<nav class="tabbar" aria-label="Основна навігація">
+  <button class="tab is-active" data-tab="vitrina" aria-label="Вітрина">
     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1.5-5h15L21 9"/><path d="M3 9h18v2a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V9z"/><path d="M5 14v6h14v-6"/><path d="M9 20v-4h6v4"/></svg>
-    <span>Витрина</span>
+    <span>Вітрина</span>
   </button>
-  <button class="tab" data-tab="cards" aria-label="Тех карты">
+  <button class="tab" data-tab="cards" aria-label="Тех карти">
     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
-    <span>Тех карты</span>
+    <span>Тех карти</span>
   </button>
-  <button class="tab" data-tab="stock" aria-label="Склад сырья">
+  <button class="tab" data-tab="stock" aria-label="Склад сировини">
     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-6 9 6v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9z"/><path d="M8 21v-8h8v8"/><path d="M8 13h8"/></svg>
     <span>Склад</span>
   </button>
