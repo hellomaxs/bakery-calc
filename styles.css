@@ -100,6 +100,7 @@ img { max-width: 100%; display: block; }
 
 /* ===== Чипы ===== */
 .chips { display: flex; gap: 8px; padding: 8px 0 14px; overflow-x: auto; scrollbar-width: none; }
+.chips.wrap { flex-wrap: wrap; overflow: visible; padding: 0; }
 .chips::-webkit-scrollbar { display: none; }
 .chip {
   padding: 8px 16px; min-height: 38px;

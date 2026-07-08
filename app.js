@@ -4,16 +4,33 @@
 const LS_KEY = "bakeryCalc:v1";
 
 const state = {
-  data: { materials: [], products: [] },
+  data: { settings: { currency: "₽" }, materials: [], products: [] },
   tab: "vitrina",
   vitrinaFilter: "all",
   expanded: null, // id развёрнутой тех карты
 };
 
+/* Категории изделий */
+const CATEGORIES = [
+  { id: "bakery", label: "Выпечка" },
+  { id: "fried", label: "Жареное" },
+  { id: "snacks", label: "Закуски" },
+  { id: "drinks", label: "Напитки" },
+  { id: "nf", label: "Полуфабрикаты" },
+];
+function catLabel(id) {
+  const c = CATEGORIES.find(c => c.id === id);
+  return c ? c.label : id;
+}
+
 function load() {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (raw) { state.data = JSON.parse(raw); return; }
+    if (raw) {
+      state.data = JSON.parse(raw);
+      if (!state.data.settings) state.data.settings = { currency: "₽" };
+      return;
+    }
   } catch (e) { /* повреждённые данные — начинаем заново */ }
   state.data = seedData();
   save();
@@ -40,20 +57,21 @@ function seedData() {
   };
   const c = (mat, brutto, netto) => ({ materialId: mat.id, brutto, netto });
   return {
+    settings: { currency: "₽" },
     materials: Object.values(mats),
     products: [
       {
         id: uid(), name: "Пирожок с изюмом", category: "bakery", photo: null,
-        markup: 200, onDisplay: true,
+        markup: 200, onDisplay: true, yieldQty: null, yieldUnit: null,
         components: [
           c(mats.flour, 55, 55), c(mats.sugar, 8, 8), c(mats.butter, 10, 10),
           c(mats.yeast, 2, 2), c(mats.milk, 25, 20), c(mats.raisin, 15, 15),
-          c(mats.egg, 0.2, 0.2), c(mats.salt, 1, 1),
+          c(mats.egg, 0.2, 10), c(mats.salt, 1, 1),
         ],
       },
       {
         id: uid(), name: "Какао на молоке", category: "drinks", photo: null,
-        markup: 250, onDisplay: true,
+        markup: 250, onDisplay: true, yieldQty: null, yieldUnit: null,
         components: [c(mats.milk, 200, 200), c(mats.cocoa, 15, 15), c(mats.sugar, 12, 12)],
       },
     ],
@@ -68,41 +86,92 @@ function unitPrice(mat) {
   if (!mat || !mat.packQty) return 0;
   return mat.packPrice / mat.packQty;
 }
-function compNetto(comp) {
-  return comp.netto != null && comp.netto !== "" ? Number(comp.netto) : Number(comp.brutto) || 0;
-}
-function compCost(comp) {
+
+/* Компонент может ссылаться на сырьё (materialId) или на другое изделие/полуфабрикат (productId).
+   stack — защита от циклов (изделие внутри самого себя). */
+function compRef(comp, stack) {
+  if (comp.productId) {
+    const p = productById(comp.productId);
+    if (!p) return null;
+    const y = prodYield(p, stack);
+    return { kind: "product", name: p.name, unit: y.unit, unitPrice: prodUnitCost(p, stack) };
+  }
   const mat = matById(comp.materialId);
-  return (Number(comp.brutto) || 0) * unitPrice(mat);
+  if (!mat) return null;
+  return { kind: "material", name: mat.name, unit: mat.unit, unitPrice: unitPrice(mat) };
 }
-function productCost(p) {
-  return p.components.reduce((s, comp) => s + compCost(comp), 0);
+
+/* Для штучных компонентов нетто хранится в граммах (вес одной порции в изделии) */
+function compNetto(comp, stack) {
+  const ref = compRef(comp, stack);
+  if (comp.netto != null && comp.netto !== "") return Number(comp.netto);
+  if (ref && ref.unit === "шт") return 0;
+  return Number(comp.brutto) || 0;
 }
-function productWeight(p) {
-  // выход: сумма нетто по весовым/объёмным компонентам
+function compCost(comp, stack) {
+  const ref = compRef(comp, stack);
+  if (!ref) return 0;
+  return (Number(comp.brutto) || 0) * ref.unitPrice;
+}
+function productCost(p, stack) {
+  stack = stack || new Set();
+  if (stack.has(p.id)) return 0; // цикл: изделие ссылается само на себя
+  stack.add(p.id);
+  const sum = p.components.reduce((s, comp) => s + compCost(comp, stack), 0);
+  stack.delete(p.id);
+  return sum;
+}
+
+/* Выход изделия: явный (yieldQty/yieldUnit) или автоматически из суммы нетто.
+   Всё весовое нормализуется в граммы (кг ×1000), объёмное — в мл (л ×1000). */
+function prodYield(p, stack) {
+  if (p.yieldQty > 0) return { qty: Number(p.yieldQty), unit: p.yieldUnit || "г" };
+  stack = stack || new Set();
+  if (stack.has(p.id)) return { qty: 0, unit: "г" };
+  stack.add(p.id);
   let g = 0, ml = 0;
   for (const comp of p.components) {
-    const mat = matById(comp.materialId);
-    if (!mat) continue;
-    if (mat.unit === "г") g += compNetto(comp);
-    else if (mat.unit === "мл") ml += compNetto(comp);
+    const ref = compRef(comp, stack);
+    if (!ref) continue;
+    const n = compNetto(comp, stack);
+    if (ref.unit === "г" || ref.unit === "шт") g += n;
+    else if (ref.unit === "кг") g += n * 1000;
+    else if (ref.unit === "мл") ml += n;
+    else if (ref.unit === "л") ml += n * 1000;
   }
+  stack.delete(p.id);
   const total = g + ml;
-  return { value: total, unit: ml > g ? "мл" : "г" };
+  return { qty: total, unit: ml > g ? "мл" : "г" };
+}
+function productWeight(p) {
+  const y = prodYield(p);
+  return { value: y.qty, unit: y.unit };
+}
+/* Цена изделия за единицу его выхода — для использования как полуфабриката */
+function prodUnitCost(p, stack) {
+  const y = prodYield(p, stack);
+  if (!y.qty) return 0;
+  return productCost(p, stack) / y.qty;
 }
 function salePrice(p) {
   return Math.ceil(productCost(p) * (1 + (Number(p.markup) || 0) / 100));
 }
 
 /* ================== Форматирование ================== */
+function cur() { return (state.data.settings && state.data.settings.currency) || "₽"; }
 function fmtNum(n, maxDigits = 2) {
   return Number(n || 0).toLocaleString("ru-RU", { maximumFractionDigits: maxDigits });
 }
-function fmtMoney(n) { return fmtNum(n, 2) + " ₽"; }
-function fmtUnitPrice(mat) {
-  const up = unitPrice(mat);
-  const digits = up < 0.1 ? 4 : 2;
-  return fmtNum(up, digits) + " ₽/" + mat.unit;
+function fmtMoney(n) { return fmtNum(n, 2) + " " + cur(); }
+function fmtPerUnit(price, unit) {
+  const digits = price > 0 && price < 0.1 ? 4 : 2;
+  return fmtNum(price, digits) + " " + cur() + "/" + unit;
+}
+function fmtUnitPrice(mat) { return fmtPerUnit(unitPrice(mat), mat.unit); }
+function fmtYield(y) {
+  if (y.unit === "г" && y.qty >= 1000) return fmtNum(y.qty / 1000, 2) + " кг";
+  if (y.unit === "мл" && y.qty >= 1000) return fmtNum(y.qty / 1000, 2) + " л";
+  return fmtNum(y.qty, 0) + " " + y.unit;
 }
 function parseNum(v) {
   const n = parseFloat(String(v).replace(",", "."));
@@ -172,14 +241,15 @@ function render() {
 /* ================== Витрина ================== */
 function renderVitrina() {
   const filter = state.vitrinaFilter;
-  const items = state.data.products.filter(p =>
-    p.onDisplay && (filter === "all" || p.category === filter));
+  const displayed = state.data.products.filter(p => p.onDisplay);
+  const cats = CATEGORIES.filter(c => displayed.some(p => p.category === c.id));
+  if (filter !== "all" && !cats.some(c => c.id === filter)) state.vitrinaFilter = "all";
+  const items = displayed.filter(p => state.vitrinaFilter === "all" || p.category === state.vitrinaFilter);
 
   const chips = `
     <div class="chips" role="tablist">
-      <button class="chip ${filter === "all" ? "is-active" : ""}" data-filter="all">Все</button>
-      <button class="chip ${filter === "bakery" ? "is-active" : ""}" data-filter="bakery">Выпечка</button>
-      <button class="chip ${filter === "drinks" ? "is-active" : ""}" data-filter="drinks">Напитки</button>
+      <button class="chip ${state.vitrinaFilter === "all" ? "is-active" : ""}" data-filter="all">Все</button>
+      ${cats.map(c => `<button class="chip ${state.vitrinaFilter === c.id ? "is-active" : ""}" data-filter="${c.id}">${c.label}</button>`).join("")}
     </div>`;
 
   if (!items.length) {
@@ -201,8 +271,8 @@ function renderVitrina() {
         <div class="body">
           <div class="name">${esc(p.name)}</div>
           <div class="meta">
-            <span class="price">${fmtNum(salePrice(p), 0)} ₽</span>
-            <span class="weight">${fmtNum(w.value, 0)} ${w.unit}</span>
+            <span class="price">${fmtNum(salePrice(p), 0)} ${cur()}</span>
+            <span class="weight">${fmtYield(w.unit ? { qty: w.value, unit: w.unit } : w)}</span>
           </div>
         </div>
       </button>`;
@@ -212,14 +282,14 @@ function renderVitrina() {
 function openProductView(id) {
   const p = productById(id);
   if (!p) return;
-  const w = productWeight(p);
+  const w = prodYield(p);
   const photo = p.photo
     ? `<img class="pv-photo" src="${p.photo}" alt="${esc(p.name)}">`
     : `<div class="pv-photo-ph">${placeholderSvg(p.category, 64)}</div>`;
   const ingredients = p.components.map(comp => {
-    const mat = matById(comp.materialId);
-    if (!mat) return "";
-    return `<div class="ing"><span>${esc(mat.name)}</span><span class="qty">${fmtNum(comp.brutto)} ${mat.unit}</span></div>`;
+    const ref = compRef(comp);
+    if (!ref) return "";
+    return `<div class="ing"><span>${esc(ref.name)}</span><span class="qty">${fmtNum(comp.brutto)} ${ref.unit}</span></div>`;
   }).join("");
 
   openSheet(`
@@ -227,8 +297,8 @@ function openProductView(id) {
     <div class="sheet-body">
       ${photo}
       <div class="pv-meta">
-        <span class="price">${fmtNum(salePrice(p), 0)} ₽</span>
-        <span class="weight">Выход: ${fmtNum(w.value, 0)} ${w.unit}</span>
+        <span class="price">${fmtNum(salePrice(p), 0)} ${cur()}</span>
+        <span class="weight">Выход: ${fmtYield(w)}</span>
       </div>
       <div class="section-title">Состав (технологическая карта)</div>
       <div class="ingr-list">${ingredients || '<div class="ing"><span>Состав не заполнен</span></div>'}</div>
@@ -246,7 +316,11 @@ function renderCards() {
       <button class="btn" data-new-product>Добавить изделие</button>
     </div>`;
   }
-  return `<div class="list" style="padding-top:8px">` + items.map(p => {
+  /* группируем по категориям в порядке CATEGORIES */
+  const groups = CATEGORIES.filter(c => items.some(p => p.category === c.id));
+  const ungrouped = items.filter(p => !CATEGORIES.some(c => c.id === p.category));
+
+  const renderItem = p => {
     const cost = productCost(p);
     const expanded = state.expanded === p.id;
     const photo = p.photo
@@ -256,28 +330,28 @@ function renderCards() {
     let detail = "";
     if (expanded) {
       const rows = p.components.map(comp => {
-        const mat = matById(comp.materialId);
-        if (!mat) return "";
+        const ref = compRef(comp);
+        if (!ref) return "";
         return `<tr>
-          <td>${esc(mat.name)}</td>
-          <td>${fmtNum(comp.brutto)}</td>
-          <td>${fmtNum(compNetto(comp))}</td>
-          <td>${fmtNum(unitPrice(mat), unitPrice(mat) < 0.1 ? 4 : 2)}</td>
+          <td>${esc(ref.name)}${ref.kind === "product" ? ' <span style="color:var(--text-2)">(н/ф)</span>' : ""}</td>
+          <td>${fmtNum(comp.brutto, 3)} ${ref.unit}</td>
+          <td>${fmtNum(compNetto(comp), 3)}</td>
+          <td>${fmtNum(ref.unitPrice, ref.unitPrice > 0 && ref.unitPrice < 0.1 ? 4 : 2)}</td>
           <td>${fmtNum(compCost(comp), 2)}</td>
         </tr>`;
       }).join("");
-      const w = productWeight(p);
+      const w = prodYield(p);
       detail = `
         <div class="tech-detail">
           <table class="tech-table">
-            <thead><tr><th>Компонент</th><th>Брутто</th><th>Нетто</th><th>Цена, ₽/ед</th><th>Сумма, ₽</th></tr></thead>
+            <thead><tr><th>Компонент</th><th>Брутто</th><th>Нетто</th><th>Цена, ${cur()}/ед</th><th>Сумма, ${cur()}</th></tr></thead>
             <tbody>${rows}</tbody>
-            <tfoot><tr><td>Итого</td><td></td><td>${fmtNum(w.value, 0)}</td><td></td><td>${fmtNum(cost, 2)}</td></tr></tfoot>
+            <tfoot><tr><td>Итого</td><td></td><td>${fmtYield(w)}</td><td></td><td>${fmtNum(cost, 2)}</td></tr></tfoot>
           </table>
           <div class="calc-summary">
             <div class="line"><span>Себестоимость</span><span class="val">${fmtMoney(cost)}</span></div>
             <div class="line"><span>Наценка</span><span class="val">${fmtNum(p.markup, 0)}%</span></div>
-            <div class="line sale"><span>Продажная цена</span><span class="val">${fmtNum(salePrice(p), 0)} ₽</span></div>
+            <div class="line sale"><span>Продажная цена</span><span class="val">${fmtNum(salePrice(p), 0)} ${cur()}</span></div>
           </div>
           <div style="display:flex;gap:10px;margin-top:14px">
             <button class="btn ghost small" data-edit-product="${p.id}">
@@ -294,7 +368,7 @@ function renderCards() {
           ${photo}
           <div class="main">
             <div class="title">${esc(p.name)}</div>
-            <div class="sub">Себест. <b>${fmtMoney(cost)}</b> · Продажа <b>${fmtNum(salePrice(p), 0)} ₽</b></div>
+            <div class="sub">Себест. <b>${fmtMoney(cost)}</b> · Продажа <b>${fmtNum(salePrice(p), 0)} ${cur()}</b></div>
           </div>
           <label class="switch" data-stop>
             <input type="checkbox" data-toggle-display="${p.id}" ${p.onDisplay ? "checked" : ""} aria-label="Выставить на витрину">
@@ -303,7 +377,17 @@ function renderCards() {
         </div>
         ${detail}
       </div>`;
-  }).join("") + `</div>`;
+  };
+
+  let html = "";
+  for (const g of groups) {
+    html += `<div class="section-title">${g.label}</div>`;
+    html += `<div class="list">` + items.filter(p => p.category === g.id).map(renderItem).join("") + `</div>`;
+  }
+  if (ungrouped.length) {
+    html += `<div class="section-title">Прочее</div><div class="list">` + ungrouped.map(renderItem).join("") + `</div>`;
+  }
+  return html;
 }
 
 /* ---------- Редактор изделия ---------- */
@@ -311,7 +395,7 @@ function openProductEditor(id) {
   const existing = id ? productById(id) : null;
   const draft = existing
     ? JSON.parse(JSON.stringify(existing))
-    : { id: uid(), name: "", category: "bakery", photo: null, markup: 200, onDisplay: true, components: [] };
+    : { id: uid(), name: "", category: "bakery", photo: null, markup: 200, onDisplay: true, yieldQty: null, yieldUnit: null, components: [] };
   const isNew = !existing;
 
   if (!state.data.materials.length) {
@@ -330,9 +414,8 @@ function openProductEditor(id) {
       </div>
       <div class="field">
         <label>Категория</label>
-        <div class="seg" id="pCat">
-          <button type="button" data-cat="bakery" class="${draft.category === "bakery" ? "is-active" : ""}">Выпечка</button>
-          <button type="button" data-cat="drinks" class="${draft.category === "drinks" ? "is-active" : ""}">Напитки</button>
+        <div class="chips wrap" id="pCat">
+          ${CATEGORIES.map(c => `<button type="button" class="chip ${draft.category === c.id ? "is-active" : ""}" data-cat="${c.id}">${c.label}</button>`).join("")}
         </div>
       </div>
       <div class="field">
@@ -350,6 +433,21 @@ function openProductEditor(id) {
       <div class="section-title">Состав (тех карта)</div>
       <div id="compList"></div>
       <button type="button" class="btn ghost small block" id="addComp">+ Добавить компонент</button>
+
+      <div class="field" style="margin-top:16px">
+        <label>Выход изделия</label>
+        <div class="form-row">
+          <div class="field" style="margin:0">
+            <input class="input" id="pYieldQty" inputmode="decimal" value="${draft.yieldQty ?? ""}" placeholder="авто">
+          </div>
+          <div class="field" style="margin:0">
+            <select class="input" id="pYieldUnit">
+              ${["г", "мл", "кг", "л", "шт"].map(u => `<option value="${u}" ${(draft.yieldUnit || "г") === u ? "selected" : ""}>${u}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+        <div class="hint">Пусто — считается автоматически из суммы нетто</div>
+      </div>
 
       <div class="section-title">Калькуляция</div>
       <div class="totals" id="totalsBox"></div>
@@ -371,6 +469,14 @@ function openProductEditor(id) {
 
   const $ = sel => overlay.querySelector(sel);
 
+  /* черновик участвует в расчётах как временное изделие */
+  function draftCost() { return draft.components.reduce((s, c) => s + compCost(c, new Set([draft.id])), 0); }
+  function draftYield() {
+    if (parseNum($("#pYieldQty").value) > 0) return { qty: parseNum($("#pYieldQty").value), unit: $("#pYieldUnit").value };
+    const tmp = { ...draft, yieldQty: null };
+    return prodYield(tmp, new Set());
+  }
+
   function renderPhoto() {
     $("#pPhotoBox").innerHTML = draft.photo
       ? `<img class="preview" src="${draft.photo}" alt="Фото изделия">`
@@ -378,25 +484,33 @@ function openProductEditor(id) {
     $("#pPhotoDel").hidden = !draft.photo;
   }
 
-  function matOptions(selected) {
-    return state.data.materials.map(m =>
-      `<option value="${m.id}" ${m.id === selected ? "selected" : ""}>${esc(m.name)} (${fmtUnitPrice(m)})</option>`
-    ).join("");
+  function refValue(comp) { return comp.productId ? "p:" + comp.productId : "m:" + comp.materialId; }
+  function refOptions(comp) {
+    const sel = refValue(comp);
+    const mats = state.data.materials.map(m =>
+      `<option value="m:${m.id}" ${sel === "m:" + m.id ? "selected" : ""}>${esc(m.name)} (${fmtUnitPrice(m)})</option>`).join("");
+    const prods = state.data.products.filter(p => p.id !== draft.id).map(p => {
+      const y = prodYield(p);
+      return `<option value="p:${p.id}" ${sel === "p:" + p.id ? "selected" : ""}>${esc(p.name)} (${fmtPerUnit(prodUnitCost(p), y.unit)})</option>`;
+    }).join("");
+    return `<optgroup label="Сырьё">${mats}</optgroup>` +
+      (prods ? `<optgroup label="Изделия и полуфабрикаты">${prods}</optgroup>` : "");
   }
 
   function renderComps() {
     const box = $("#compList");
     if (!draft.components.length) {
-      box.innerHTML = `<p style="color:var(--text-2);font-size:14px;margin:4px 2px 12px">Добавьте компоненты из склада сырья — себестоимость посчитается автоматически.</p>`;
+      box.innerHTML = `<p style="color:var(--text-2);font-size:14px;margin:4px 2px 12px">Добавьте компоненты — сырьё со склада или готовые полуфабрикаты. Себестоимость посчитается автоматически.</p>`;
       return;
     }
     box.innerHTML = draft.components.map((comp, i) => {
-      const mat = matById(comp.materialId);
-      const unit = mat ? mat.unit : "";
+      const ref = compRef(comp, new Set([draft.id]));
+      const unit = ref ? ref.unit : "";
+      const nettoLabel = unit === "шт" ? "Нетто (вес), г" : `Нетто, ${unit}`;
       return `
         <div class="comp-row" data-i="${i}">
           <div class="top">
-            <select class="input" data-f="materialId" aria-label="Сырьё">${matOptions(comp.materialId)}</select>
+            <select class="input" data-f="ref" aria-label="Компонент">${refOptions(comp)}</select>
             <button type="button" class="del" data-del-comp aria-label="Удалить компонент">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V7h10z"/></svg>
             </button>
@@ -407,36 +521,35 @@ function openProductEditor(id) {
               <input class="input" data-f="brutto" inputmode="decimal" value="${comp.brutto ?? ""}" placeholder="0">
             </div>
             <div class="field">
-              <label>Нетто, ${unit}</label>
-              <input class="input" data-f="netto" inputmode="decimal" value="${comp.netto ?? ""}" placeholder="${comp.brutto ?? "0"}">
+              <label>${nettoLabel}</label>
+              <input class="input" data-f="netto" inputmode="decimal" value="${comp.netto ?? ""}" placeholder="${unit === "шт" ? "0" : (comp.brutto ?? "0")}">
             </div>
           </div>
-          <div class="cost">Сумма: <b>${fmtMoney(compCost(comp))}</b></div>
+          <div class="cost">Сумма: <b>${fmtMoney(compCost(comp, new Set([draft.id])))}</b></div>
         </div>`;
     }).join("");
   }
 
   function renderTotals() {
-    const cost = productCost(draft);
-    const w = productWeight(draft);
-    const sale = salePrice(draft);
-    const exact = cost * (1 + (Number(draft.markup) || 0) / 100);
+    const cost = draftCost();
+    const y = draftYield();
+    draft.markup = Number(draft.markup) || 0;
+    const exact = cost * (1 + draft.markup / 100);
+    const sale = Math.ceil(exact);
     $("#totalsBox").innerHTML = `
       <div class="line"><span>Себестоимость</span><span class="val">${fmtMoney(cost)}</span></div>
-      <div class="line"><span>Выход</span><span class="val">${fmtNum(w.value, 0)} ${w.unit}</span></div>
+      <div class="line"><span>Выход</span><span class="val">${fmtYield(y)}</span></div>
       <div class="line" style="padding-top:8px">
         <span>Наценка, %</span>
         <span class="markup-field">
           <input class="input" id="pMarkup" inputmode="numeric" value="${draft.markup}">
         </span>
       </div>
-      <div class="line sale"><span>Продажная цена</span><span class="val">${fmtNum(sale, 0)} ₽</span></div>
+      <div class="line sale"><span>Продажная цена</span><span class="val">${fmtNum(sale, 0)} ${cur()}</span></div>
       ${Math.abs(sale - exact) > 0.005 ? `<div class="line" style="padding:0"><span style="font-size:12.5px;color:var(--text-2)">точно: ${fmtMoney(exact)}, округлено вверх</span><span></span></div>` : ""}`;
     $("#pMarkup").addEventListener("input", e => {
       draft.markup = parseNum(e.target.value);
-      // обновляем только строку продажной цены, чтобы не терять фокус
-      const sale2 = salePrice(draft);
-      $("#totalsBox .sale .val").textContent = fmtNum(sale2, 0) + " ₽";
+      $("#totalsBox .sale .val").textContent = fmtNum(Math.ceil(draftCost() * (1 + draft.markup / 100)), 0) + " " + cur();
     });
     $("#pMarkup").addEventListener("blur", renderTotals);
   }
@@ -448,9 +561,13 @@ function openProductEditor(id) {
     const b = e.target.closest("[data-cat]");
     if (!b) return;
     draft.category = b.dataset.cat;
-    $("#pCat").querySelectorAll("button").forEach(x => x.classList.toggle("is-active", x === b));
+    $("#pCat").querySelectorAll(".chip").forEach(x => x.classList.toggle("is-active", x === b));
     renderPhoto();
   });
+
+  // Выход
+  $("#pYieldQty").addEventListener("input", renderTotals);
+  $("#pYieldUnit").addEventListener("change", renderTotals);
 
   // Фото
   $("#pPhotoBtn").addEventListener("click", () => $("#pPhotoInput").click());
@@ -476,16 +593,20 @@ function openProductEditor(id) {
     const f = e.target.dataset.f;
     if (f === "brutto" || f === "netto") {
       comp[f] = e.target.value === "" ? "" : parseNum(e.target.value);
-      row.querySelector(".cost b").textContent = fmtMoney(compCost(comp));
-      if (f === "brutto") row.querySelector('[data-f="netto"]').placeholder = e.target.value || "0";
+      row.querySelector(".cost b").textContent = fmtMoney(compCost(comp, new Set([draft.id])));
+      const ref = compRef(comp, new Set([draft.id]));
+      if (f === "brutto" && (!ref || ref.unit !== "шт")) row.querySelector('[data-f="netto"]').placeholder = e.target.value || "0";
       renderTotals();
     }
   });
   $("#compList").addEventListener("change", e => {
     const row = e.target.closest(".comp-row"); if (!row) return;
     const comp = draft.components[Number(row.dataset.i)];
-    if (e.target.dataset.f === "materialId") {
-      comp.materialId = e.target.value;
+    if (e.target.dataset.f === "ref") {
+      const [kind, refId] = [e.target.value.slice(0, 1), e.target.value.slice(2)];
+      delete comp.materialId; delete comp.productId;
+      if (kind === "p") comp.productId = refId;
+      else comp.materialId = refId;
       renderComps(); renderTotals();
     }
   });
@@ -499,8 +620,13 @@ function openProductEditor(id) {
   // Удаление изделия
   const delBtn = $("#pDelete");
   if (delBtn) delBtn.addEventListener("click", () => {
-    if (!confirm(`Удалить «${draft.name}»? Действие нельзя отменить.`)) return;
+    const usedIn = state.data.products.filter(o => o.id !== id && o.components.some(c => c.productId === id));
+    const warn = usedIn.length
+      ? `\n\nИспользуется как компонент в: ${usedIn.map(o => o.name).join(", ")} — будет удалено из их состава.`
+      : "";
+    if (!confirm(`Удалить «${draft.name}»?${warn}`)) return;
     state.data.products = state.data.products.filter(p => p.id !== id);
+    state.data.products.forEach(o => { o.components = o.components.filter(c => c.productId !== id); });
     save(); closeSheet(overlay); render();
     toast("Изделие удалено");
   });
@@ -515,13 +641,24 @@ function openProductEditor(id) {
       return;
     }
     draft.onDisplay = $("#pDisplay").checked;
+    const yq = parseNum($("#pYieldQty").value);
+    draft.yieldQty = yq > 0 ? yq : null;
+    draft.yieldUnit = yq > 0 ? $("#pYieldUnit").value : null;
     draft.components = draft.components
-      .filter(comp => comp.materialId && (Number(comp.brutto) || 0) > 0)
-      .map(comp => ({
-        materialId: comp.materialId,
-        brutto: Number(comp.brutto) || 0,
-        netto: comp.netto === "" || comp.netto == null ? Number(comp.brutto) || 0 : Number(comp.netto),
-      }));
+      .filter(comp => (comp.materialId || comp.productId) && (Number(comp.brutto) || 0) >= 0 && comp.brutto !== "")
+      .map(comp => {
+        const ref = compRef(comp, new Set([draft.id]));
+        const isPiece = ref && ref.unit === "шт";
+        const out = {
+          brutto: Number(comp.brutto) || 0,
+          netto: comp.netto === "" || comp.netto == null
+            ? (isPiece ? 0 : Number(comp.brutto) || 0)
+            : Number(comp.netto),
+        };
+        if (comp.productId) out.productId = comp.productId;
+        else out.materialId = comp.materialId;
+        return out;
+      });
     const idx = state.data.products.findIndex(p => p.id === draft.id);
     if (idx >= 0) state.data.products[idx] = draft;
     else state.data.products.push(draft);
@@ -553,25 +690,33 @@ function resizeImage(file, maxSide) {
 /* ================== Склад сырья ================== */
 function renderStock() {
   const items = state.data.materials;
+  const noPrice = items.filter(m => !(m.packPrice > 0)).length;
   const list = !items.length
     ? `<div class="empty">
         <svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-6 9 6v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9z"/><path d="M8 21v-8h8v8"/></svg>
         <p>Склад пуст. Добавьте первое сырьё.</p>
         <button class="btn" data-new-material>Добавить сырьё</button>
       </div>`
-    : `<div class="list" style="padding-top:8px">` + items.map(m => `
+    : (noPrice ? `<p style="color:var(--text-2);font-size:13.5px;margin:8px 2px 0">⚠ Без цены: ${noPrice} поз. — себестоимость изделий с ними будет занижена.</p>` : "") +
+      `<div class="list" style="padding-top:8px">` + items.map(m => `
         <div class="row-card mat-row" data-edit-material="${m.id}">
-          <div class="ic">${esc(m.name.trim()[0].toUpperCase())}</div>
+          <div class="ic">${esc((m.name.trim()[0] || "?").toUpperCase())}</div>
           <div class="main">
             <div class="title">${esc(m.name)}</div>
-            <div class="sub">${fmtNum(m.packQty)} ${m.unit} — ${fmtMoney(m.packPrice)} · <b>${fmtUnitPrice(m)}</b></div>
+            <div class="sub">${m.packPrice > 0
+              ? `${fmtNum(m.packQty)} ${m.unit} — ${fmtMoney(m.packPrice)} · <b>${fmtUnitPrice(m)}</b>`
+              : `<span style="color:var(--danger)">цена не указана</span>`}</div>
           </div>
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--text-2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
         </div>`).join("") + `</div>`;
 
   return list + `
     <div class="backup">
-      <p>Данные хранятся на этом устройстве</p>
+      <p>Данные хранятся на этом устройстве · Валюта:
+        <select id="curSelect" style="border:0;background:none;color:var(--primary);font-weight:600">
+          ${["₽", "₴", "€", "$", "₸"].map(c => `<option value="${c}" ${cur() === c ? "selected" : ""}>${c}</option>`).join("")}
+        </select>
+      </p>
       <div class="btns">
         <button class="btn ghost small" data-export>Экспорт</button>
         <button class="btn ghost small" data-import>Импорт</button>
@@ -598,9 +743,8 @@ function openMaterialEditor(id) {
       <div class="field">
         <label for="mUnit">Единица измерения</label>
         <select class="input" id="mUnit">
-          <option value="г" ${draft.unit === "г" ? "selected" : ""}>граммы (г)</option>
-          <option value="мл" ${draft.unit === "мл" ? "selected" : ""}>миллилитры (мл)</option>
-          <option value="шт" ${draft.unit === "шт" ? "selected" : ""}>штуки (шт)</option>
+          ${[["г", "граммы (г)"], ["кг", "килограммы (кг)"], ["мл", "миллилитры (мл)"], ["л", "литры (л)"], ["шт", "штуки (шт)"]]
+            .map(([v, t]) => `<option value="${v}" ${draft.unit === v ? "selected" : ""}>${t}</option>`).join("")}
         </select>
       </div>
       <div class="form-row">
@@ -610,7 +754,7 @@ function openMaterialEditor(id) {
           <div class="err" id="mQtyErr" hidden>Больше нуля</div>
         </div>
         <div class="field">
-          <label for="mPrice">Цена упаковки, ₽</label>
+          <label for="mPrice">Цена упаковки, ${cur()}</label>
           <input class="input" id="mPrice" inputmode="decimal" value="${draft.packPrice}" placeholder="60">
           <div class="err" id="mPriceErr" hidden>Больше нуля</div>
         </div>
@@ -630,7 +774,7 @@ function openMaterialEditor(id) {
     const price = parseNum($("#mPrice").value);
     const unit = $("#mUnit").value;
     $("#mCalc").textContent = qty > 0 && price > 0
-      ? `Цена за единицу: ${fmtNum(price / qty, price / qty < 0.1 ? 4 : 2)} ₽/${unit}`
+      ? `Цена за единицу: ${fmtPerUnit(price / qty, unit)}`
       : "";
   }
   ["mQty", "mPrice"].forEach(fid => $("#" + fid).addEventListener("input", updCalc));
@@ -691,7 +835,8 @@ function importData(file) {
     try {
       const data = JSON.parse(reader.result);
       if (!Array.isArray(data.materials) || !Array.isArray(data.products)) throw new Error("bad format");
-      if (!confirm("Заменить все текущие данные данными из файла?")) return;
+      if (!data.settings) data.settings = { currency: cur() };
+      if (!confirm(`Заменить все текущие данные данными из файла?\n(${data.materials.length} поз. сырья, ${data.products.length} изделий)`)) return;
       state.data = data;
       save(); render();
       toast("Данные импортированы");
@@ -756,6 +901,12 @@ document.getElementById("view").addEventListener("change", e => {
       save();
       toast(p.onDisplay ? "Выставлено на витрину" : "Убрано с витрины");
     }
+    return;
+  }
+  if (e.target.id === "curSelect") {
+    state.data.settings.currency = e.target.value;
+    save();
+    toast("Валюта: " + e.target.value);
     return;
   }
   if (e.target.id === "importInput" && e.target.files[0]) {
