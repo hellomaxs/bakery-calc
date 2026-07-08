@@ -23,7 +23,7 @@ function catLabel(id) {
   return c ? c.label : id;
 }
 
-function load() {
+async function load() {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
@@ -720,8 +720,10 @@ function renderStock() {
       <div class="btns">
         <button class="btn ghost small" data-export>Экспорт</button>
         <button class="btn ghost small" data-import>Импорт</button>
+        <button class="btn ghost small" data-import-xlsx>Импорт из Excel</button>
       </div>
       <input type="file" id="importInput" accept="application/json,.json" hidden>
+      <input type="file" id="importXlsxInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
     </div>`;
 }
 
@@ -829,6 +831,41 @@ function exportData() {
   URL.revokeObjectURL(a.href);
   toast("Файл с данными сохранён");
 }
+const loadedScripts = {};
+function loadScript(src) {
+  if (!loadedScripts[src]) {
+    loadedScripts[src] = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = () => { delete loadedScripts[src]; reject(new Error("load failed")); };
+      document.head.appendChild(s);
+    });
+  }
+  return loadedScripts[src];
+}
+
+async function importXlsx(file) {
+  toast("Читаю Excel…");
+  try {
+    await loadScript("vendor/xlsx.full.min.js");
+    await loadScript("xlsx-import.js");
+    const buf = await file.arrayBuffer();
+    const parsed = window.parseCalcCards(buf);
+    const nf = parsed.products.filter(p => p.category === "nf").length;
+    const noPrice = parsed.materials.filter(m => !(m.packPrice > 0)).length;
+    if (!confirm(
+      `Найдено: ${parsed.products.length} изделий (из них ${nf} полуфабрикатов), ` +
+      `${parsed.materials.length} позиций сырья${noPrice ? `, без цены: ${noPrice}` : ""}.\n\n` +
+      `Заменить все текущие данные? Фото и цены, введённые вручную, будут потеряны.`)) return;
+    state.data = { settings: state.data.settings, ...parsed };
+    save(); render();
+    toast("Тех карты загружены из Excel");
+  } catch (e) {
+    toast("Не удалось разобрать файл — нужен Excel с калькуляционными картами");
+  }
+}
+
 function importData(file) {
   const reader = new FileReader();
   reader.onload = () => {
@@ -890,6 +927,7 @@ document.getElementById("view").addEventListener("click", e => {
 
   if (e.target.closest("[data-export]")) { exportData(); return; }
   if (e.target.closest("[data-import]")) { document.getElementById("importInput").click(); return; }
+  if (e.target.closest("[data-import-xlsx]")) { document.getElementById("importXlsxInput").click(); return; }
 });
 
 document.getElementById("view").addEventListener("change", e => {
@@ -912,12 +950,16 @@ document.getElementById("view").addEventListener("change", e => {
   if (e.target.id === "importInput" && e.target.files[0]) {
     importData(e.target.files[0]);
     e.target.value = "";
+    return;
+  }
+  if (e.target.id === "importXlsxInput" && e.target.files[0]) {
+    importXlsx(e.target.files[0]);
+    e.target.value = "";
   }
 });
 
 /* ================== Запуск ================== */
-load();
-switchTab("vitrina");
+load().then(() => switchTab("vitrina"));
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("sw.js").catch(() => {});
