@@ -363,7 +363,9 @@ function renderCards() {
           </div>
         </div>
         <div class="tc-foot">
-          <span>Наценка ${fmtNum(p.markup, 0)}%</span>
+          <label class="markup-inline">Наценка
+            <input class="input mk" data-markup="${p.id}" inputmode="numeric" value="${Number(p.markup) || 0}" aria-label="Наценка, %"> %
+          </label>
           <span class="sale">${fmtNum(salePrice(p), 0)} ${cur()}</span>
         </div>
       </div>`;
@@ -934,6 +936,17 @@ document.getElementById("view").addEventListener("click", e => {
   }
   if (e.target.closest("[data-import]")) { document.getElementById("importInput").click(); return; }
   if (e.target.closest("[data-import-xlsx]")) { document.getElementById("importXlsxInput").click(); return; }
+});
+
+document.getElementById("view").addEventListener("input", e => {
+  const inp = e.target.closest("[data-markup]");
+  if (!inp) return;
+  const p = productById(inp.dataset.markup);
+  if (!p) return;
+  p.markup = parseNum(inp.value);
+  save();
+  const sale = inp.closest(".row-card").querySelector(".tc-foot .sale");
+  if (sale) sale.textContent = fmtNum(salePrice(p), 0) + " " + cur();
 });
 
 document.getElementById("view").addEventListener("change", e => {
