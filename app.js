@@ -34,6 +34,7 @@ const MAT_GROUPS = [
   { id: "topping", label: "Топпинги" },
   { id: "greens", label: "Зелень" },
   { id: "eggs", label: "Яйца" },
+  { id: "pack", label: "Посуда/упаковка" },
   { id: "grocery", label: "Бакалея" },
 ];
 
@@ -49,11 +50,13 @@ const GROUP_ICONS = {
   nf: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>`,
   eggs: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3c3.5 0 6.5 5.5 6.5 10a6.5 6.5 0 0 1-13 0C5.5 8.5 8.5 3 12 3z"/></svg>`,
   grocery: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M5 8h14l-1.5 12a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>`,
+  pack: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14"/><path d="M6 8l1.6 13h8.8L18 8"/><path d="M5 8l1-3.5h12L19 8"/></svg>`,
 };
 
 /* Автоопределение группы по названию (укр/рус). Порядок проверки важен. */
 const GROUP_KEYWORDS = [
   ["eggs", ["яйц", "яйце", "меланж"]],
+  ["pack", ["стакан", "кришк", "крышк", "упаковк", "пакет", "коробк", "лоток", "серветк", "салфетк", "трубочк", "соломинк", "посуд", "контейнер", "плівк", "пленк", "фольг", "пергамент", "кульок", "тарілк", "тарелк", "вилк", "ложк", "паличк", "шпажк", "етикетк", "этикетк", "наклейк"], ["пакетик"]],
   ["greens", ["зелен", "укроп", "кріп", "петруш", "базилік", "базилик", "тимьян", "тим'ян", "руккол", "шпинат"]],
   ["topping", ["соус", "кетчуп", "майонез", "гірчиц", "горчиц", "повидл", "варення", "джем", "топинг", "топпинг", "згущ", "сгущ", "мед", "карамел", "заправка", "начинк", "сироп"]],
   ["meat", ["свинин", "говяд", "ялович", "куряч", "курин", "філе", "филе", "бедр", "ковб", "колбас", "сосиск", "бекон", "шинка", "ветчин", "м'яс", "мясо", "фарш", "нагетс"]],
@@ -64,7 +67,8 @@ const GROUP_KEYWORDS = [
 ];
 function classifyMaterial(name) {
   const n = String(name || "").toLowerCase();
-  for (const [group, words] of GROUP_KEYWORDS) {
+  for (const [group, words, exclude] of GROUP_KEYWORDS) {
+    if (exclude && exclude.some(w => n.includes(w))) continue;
     if (words.some(w => n.includes(w))) return group;
   }
   return "grocery";
@@ -84,7 +88,16 @@ async function load() {
     if (raw) {
       state.data = JSON.parse(raw);
       if (!state.data.settings) state.data.settings = { currency: "₽" };
-      if (ensureGroups(state.data)) save();
+      let changed = ensureGroups(state.data);
+      // v2 групп: посуда/упаковка — переклассифицируем ранее авторазложенное в бакалею
+      if ((state.data.settings.groupsVer || 1) < 2) {
+        for (const m of state.data.materials) {
+          if (m.group === "grocery" && classifyMaterial(m.name) === "pack") m.group = "pack";
+        }
+        state.data.settings.groupsVer = 2;
+        changed = true;
+      }
+      if (changed) save();
       return;
     }
   } catch (e) { /* повреждённые данные — начинаем заново */ }
