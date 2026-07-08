@@ -437,7 +437,13 @@ function renderVitrina() {
       </div>`;
   }
 
-  return chips + `<div class="grid">` + items.map(p => {
+  const printBtn = `
+    <button class="btn ghost small block print-btn" data-print-vitrina>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8V3h10v5"/><path d="M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="7" y="14" width="10" height="7"/></svg>
+      РАСПЕЧАТАТЬ
+    </button>`;
+
+  return chips + printBtn + `<div class="grid">` + items.map(p => {
     const w = productWeight(p);
     const photo = p.photo
       ? `<img class="photo" src="${p.photo}" alt="${esc(p.name)}">`
@@ -1170,6 +1176,15 @@ document.getElementById("view").addEventListener("click", e => {
     loadScript("vendor/xlsx.full.min.js")
       .then(() => loadScript("export-docs.js"))
       .then(() => window.exportExcelFile())
+      .catch(() => toast("Нет сети — попробуйте позже"));
+    return;
+  }
+  if (e.target.closest("[data-print-vitrina]")) {
+    toast("Готовлю PDF витрины…");
+    loadScript("vendor/pdfmake.min.js")
+      .then(() => loadScript("vendor/vfs_fonts.js"))
+      .then(() => loadScript("export-docs.js"))
+      .then(() => window.exportVitrinaPdf())
       .catch(() => toast("Нет сети — попробуйте позже"));
     return;
   }

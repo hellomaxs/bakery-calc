@@ -133,7 +133,14 @@ function buildPdfDoc() {
       content.push({
         unbreakable: p.components.length <= 12,
         stack: [
-          { text: `${p.name} — выход: ${fmtYield(y)}`, style: "h2" },
+          {
+            table: { widths: ["*"], body: [[{
+              text: `${p.name} — выход: ${fmtYield(y)}`,
+              bold: true, color: "#000000", fontSize: 10.5,
+              fillColor: "#BDE26B", margin: [6, 4, 6, 4],
+            }]] },
+            layout: "noBorders", margin: [0, 6, 0, 0],
+          },
           {
             table: { headerRows: 1, widths: ["*", 55, 45, 55, 55], body },
             layout: {
@@ -198,7 +205,79 @@ function exportPdfFile() {
   pdfMake.createPdf(buildPdfDoc()).download(`tehkarty-${docFileStamp()}.pdf`);
 }
 
+/* ---------- PDF витрины: только продажные цены ---------- */
+function buildVitrinaPdfDoc() {
+  const c = cur();
+  const content = [
+    { text: "Витрина", style: "title" },
+    { text: docDateStr(), style: "muted", margin: [0, 0, 0, 12] },
+  ];
+
+  const displayed = state.data.products.filter(p => p.onDisplay);
+  const groups = [];
+  for (const cat of CATEGORIES) {
+    const list = displayed.filter(p => p.category === cat.id);
+    if (list.length) groups.push({ label: cat.label, list });
+  }
+  const other = displayed.filter(p => !CATEGORIES.some(cat => cat.id === p.category));
+  if (other.length) groups.push({ label: "Прочее", list: other });
+
+  for (const g of groups) {
+    content.push({ text: g.label, style: "h1" });
+    const body = g.list.map(p => {
+      const y = prodYield(p);
+      const photoCell = p.photo && String(p.photo).startsWith("data:image")
+        ? { image: p.photo, fit: [46, 46], margin: [0, 2, 0, 2] }
+        : { text: "" };
+      return [
+        photoCell,
+        {
+          stack: [
+            { text: p.name, bold: true, fontSize: 11 },
+            { text: `Выход: ${fmtYield(y)}`, fontSize: 8.5, color: "#777777", margin: [0, 2, 0, 0] },
+          ],
+          margin: [0, 6, 0, 6],
+        },
+        { text: `${fmtNum(salePrice(p), 0)} ${c}`, bold: true, fontSize: 14, alignment: "right", margin: [0, 8, 0, 0] },
+      ];
+    });
+    content.push({
+      table: { widths: [54, "*", 80], body },
+      layout: {
+        hLineWidth: (i, node) => (i === 0 || i === node.table.body.length ? 0 : 0.4),
+        vLineWidth: () => 0,
+        hLineColor: () => "#CCCCCC",
+        paddingTop: () => 3, paddingBottom: () => 3,
+      },
+      margin: [0, 2, 0, 10],
+    });
+  }
+
+  if (!groups.length) content.push({ text: "На витрине нет ни одного изделия", style: "muted" });
+
+  return {
+    pageSize: "A4",
+    pageMargins: [36, 36, 36, 44],
+    footer: (page, pages) => ({
+      text: `${page} / ${pages}`, alignment: "center", fontSize: 8, color: "#888888", margin: [0, 14, 0, 0],
+    }),
+    content,
+    defaultStyle: { fontSize: 10, lineHeight: 1.15 },
+    styles: {
+      title: { fontSize: 16, bold: true },
+      muted: { fontSize: 9, color: "#777777" },
+      h1: { fontSize: 12, bold: true, margin: [0, 10, 0, 4] },
+    },
+  };
+}
+
+function exportVitrinaPdf() {
+  pdfMake.createPdf(buildVitrinaPdfDoc()).download(`vitrina-${docFileStamp()}.pdf`);
+}
+
 window.exportExcelFile = exportExcelFile;
 window.exportPdfFile = exportPdfFile;
+window.exportVitrinaPdf = exportVitrinaPdf;
 window.buildExcelWorkbook = buildExcelWorkbook;
 window.buildPdfDoc = buildPdfDoc;
+window.buildVitrinaPdfDoc = buildVitrinaPdfDoc;

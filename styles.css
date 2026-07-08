@@ -257,6 +257,8 @@ img { max-width: 100%; display: block; }
 .btn.small { min-height: 38px; padding: 6px 14px; font-size: 13.5px; border-radius: 10px; }
 .btn.block { width: 100%; }
 
+.print-btn { margin: 0 0 14px; letter-spacing: .04em; }
+
 /* ===== Пустые состояния ===== */
 .empty { text-align: center; padding: 56px 24px; color: var(--text-2); }
 .empty svg { margin: 0 auto 12px; opacity: .5; }
