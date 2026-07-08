@@ -172,6 +172,39 @@ img { max-width: 100%; display: block; }
 .switch input:checked + .track::after { transform: translateX(18px); }
 .switch .lbl { font-size: 12.5px; color: var(--text-2); }
 
+/* Таблица состава в тех картах: общая залипающая шапка + сетка строк */
+:root { --tcols: minmax(0, 2fr) 0.95fr 0.75fr 0.85fr 0.9fr; }
+.cols-head {
+  position: sticky;
+  top: calc(var(--header-h) + env(safe-area-inset-top));
+  z-index: 15;
+  display: grid; grid-template-columns: var(--tcols); gap: 4px;
+  padding: 9px 12px; margin: 0 0 4px;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--text-2);
+}
+.cols-head span:not(:first-child) { text-align: right; }
+.tgrid { width: 100%; margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 4px; }
+.trow {
+  display: grid; grid-template-columns: var(--tcols); gap: 4px;
+  padding: 5px 0; font-size: 12.5px; line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+}
+.trow span { min-width: 0; overflow-wrap: break-word; }
+.trow span:not(:first-child) { text-align: right; }
+.trow.total { border-bottom: 0; font-weight: 700; padding-top: 8px; }
+.trow .nf { font-style: normal; font-size: 10px; color: var(--text-2); border: 1px solid var(--line); border-radius: 5px; padding: 0 4px; white-space: nowrap; }
+.tc-foot {
+  width: 100%; display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--line);
+  font-size: 13.5px; color: var(--text-2);
+}
+.tc-foot .sale { color: var(--primary); font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
 /* Развёрнутая тех карта */
 .tech-detail { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; }
 .tech-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }

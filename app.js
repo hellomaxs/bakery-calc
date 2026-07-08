@@ -322,64 +322,57 @@ function renderCards() {
 
   const renderItem = p => {
     const cost = productCost(p);
-    const expanded = state.expanded === p.id;
+    const w = prodYield(p);
     const photo = p.photo
       ? `<img class="thumb" src="${p.photo}" alt="">`
       : `<div class="thumb-ph">${placeholderSvg(p.category, 32)}</div>`;
 
-    let detail = "";
-    if (expanded) {
-      const rows = p.components.map(comp => {
-        const ref = compRef(comp);
-        if (!ref) return "";
-        return `<tr>
-          <td>${esc(ref.name)}${ref.kind === "product" ? ' <span style="color:var(--text-2)">(н/ф)</span>' : ""}</td>
-          <td>${fmtNum(comp.brutto, 3)} ${ref.unit}</td>
-          <td>${fmtNum(compNetto(comp), 3)}</td>
-          <td>${fmtNum(ref.unitPrice, ref.unitPrice > 0 && ref.unitPrice < 0.1 ? 4 : 2)}</td>
-          <td>${fmtNum(compCost(comp), 2)}</td>
-        </tr>`;
-      }).join("");
-      const w = prodYield(p);
-      detail = `
-        <div class="tech-detail">
-          <table class="tech-table">
-            <thead><tr><th>Компонент</th><th>Брутто</th><th>Нетто</th><th>Цена, ${cur()}/ед</th><th>Сумма, ${cur()}</th></tr></thead>
-            <tbody>${rows}</tbody>
-            <tfoot><tr><td>Итого</td><td></td><td>${fmtYield(w)}</td><td></td><td>${fmtNum(cost, 2)}</td></tr></tfoot>
-          </table>
-          <div class="calc-summary">
-            <div class="line"><span>Себестоимость</span><span class="val">${fmtMoney(cost)}</span></div>
-            <div class="line"><span>Наценка</span><span class="val">${fmtNum(p.markup, 0)}%</span></div>
-            <div class="line sale"><span>Продажная цена</span><span class="val">${fmtNum(salePrice(p), 0)} ${cur()}</span></div>
-          </div>
-          <div style="display:flex;gap:10px;margin-top:14px">
-            <button class="btn ghost small" data-edit-product="${p.id}">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
-              Изменить
-            </button>
-          </div>
-        </div>`;
-    }
+    const rows = p.components.map(comp => {
+      const ref = compRef(comp);
+      if (!ref) return "";
+      return `<div class="trow">
+        <span>${esc(ref.name)}${ref.kind === "product" ? ' <i class="nf">н/ф</i>' : ""}</span>
+        <span>${fmtNum(comp.brutto, 3)} ${ref.unit}</span>
+        <span>${fmtNum(compNetto(comp), 3)}</span>
+        <span>${fmtNum(ref.unitPrice, ref.unitPrice > 0 && ref.unitPrice < 0.1 ? 4 : 2)}</span>
+        <span>${fmtNum(compCost(comp), 2)}</span>
+      </div>`;
+    }).join("");
 
     return `
       <div class="row-card" style="flex-direction:column">
-        <div class="rc-head" style="width:100%" data-expand="${p.id}">
+        <div class="rc-head" style="width:100%" data-edit-product="${p.id}">
           ${photo}
           <div class="main">
             <div class="title">${esc(p.name)}</div>
-            <div class="sub">Себест. <b>${fmtMoney(cost)}</b> · Продажа <b>${fmtNum(salePrice(p), 0)} ${cur()}</b></div>
+            <div class="sub">Выход <b>${fmtYield(w)}</b> · Себест. <b>${fmtMoney(cost)}</b></div>
           </div>
           <label class="switch" data-stop>
             <input type="checkbox" data-toggle-display="${p.id}" ${p.onDisplay ? "checked" : ""} aria-label="Выставить на витрину">
             <span class="track"></span>
           </label>
         </div>
-        ${detail}
+        <div class="tgrid">
+          ${rows || '<p style="color:var(--text-2);font-size:13px;margin:6px 0">Состав не заполнен</p>'}
+          <div class="trow total">
+            <span>Итого</span>
+            <span></span>
+            <span>${fmtYield(w)}</span>
+            <span></span>
+            <span>${fmtNum(cost, 2)}</span>
+          </div>
+        </div>
+        <div class="tc-foot">
+          <span>Наценка ${fmtNum(p.markup, 0)}%</span>
+          <span class="sale">${fmtNum(salePrice(p), 0)} ${cur()}</span>
+        </div>
       </div>`;
   };
 
-  let html = "";
+  let html = `
+    <div class="cols-head">
+      <span>Компонент</span><span>Брутто</span><span>Нетто</span><span>Цена, ${cur()}</span><span>Сумма, ${cur()}</span>
+    </div>`;
   for (const g of groups) {
     html += `<div class="section-title">${g.label}</div>`;
     html += `<div class="list">` + items.filter(p => p.category === g.id).map(renderItem).join("") + `</div>`;
@@ -663,7 +656,6 @@ function openProductEditor(id) {
     if (idx >= 0) state.data.products[idx] = draft;
     else state.data.products.push(draft);
     save(); closeSheet(overlay);
-    state.expanded = draft.id;
     render();
     toast(isNew ? "Изделие добавлено" : "Сохранено");
   });
@@ -908,16 +900,7 @@ document.getElementById("view").addEventListener("click", e => {
   const openP = e.target.closest("[data-open-product]");
   if (openP) { openProductView(openP.dataset.openProduct); return; }
 
-  if (e.target.closest("[data-stop]")) {
-    // клик по свитчу — не разворачивать карточку
-  } else {
-    const exp = e.target.closest("[data-expand]");
-    if (exp) {
-      const pid = exp.dataset.expand;
-      state.expanded = state.expanded === pid ? null : pid;
-      render(); return;
-    }
-  }
+  if (e.target.closest("[data-stop]")) return; // свитч «на витрину» обрабатывается в change
 
   const editP = e.target.closest("[data-edit-product]");
   if (editP) { openProductEditor(editP.dataset.editProduct); return; }
