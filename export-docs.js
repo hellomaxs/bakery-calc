@@ -218,7 +218,15 @@ function buildMenuPdfDoc() {
   if (other.length) groups.push({ id: null, label: "Інше", list: other });
 
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(v)));
-  const USABLE = 640; // приблизна висота під шапкою на A4 (для рівномірного заповнення)
+
+  /* Шрифт підбирається так, щоб на один аркуш вміщалось рівно 15 рядків.
+     Категорії з понад 15 виробів продовжуються на наступному аркуші. */
+  const PER_PAGE = 15;
+  const USABLE = 660;              // висота під рядки на A4 після шапки категорії
+  const rowBlock = USABLE / PER_PAGE;
+  const font = clamp(rowBlock * 0.6, 14, 26);
+  const priceFont = Math.max(12, Math.round(font * 0.82));
+  const gap = clamp(rowBlock - font * 1.32, 4, 40);
 
   /* Шапка категорії: круглий бейдж категорії зліва + коричнева смуга з білою назвою.
      Бейдж (56) вищий за смугу (~38) — виходить за її межі зверху та знизу. */
@@ -242,44 +250,31 @@ function buildMenuPdfDoc() {
     };
   }
 
+  const row = p => ({
+    columns: [
+      { text: p.name, bold: true, fontSize: font, width: "*", noWrap: true },
+      { text: `${fmtNum(salePrice(p), 0)} ${c}`, bold: true, fontSize: priceFont, color: "#6B3F1D", width: "auto", margin: [8, Math.round((font - priceFont) * 0.5), 0, 0] },
+    ],
+    columnGap: 12,
+    margin: [0, 0, 0, gap],
+  });
+
   const content = [];
-  groups.forEach((g, gi) => {
-    const header = categoryHeader(g.id, g.label);
-    if (gi > 0) header.pageBreak = "before";
-    content.push(header);
-
-    const n = g.list.length;
-    const twoCols = n > 15;
-    const perCol = twoCols ? Math.ceil(n / 2) : n;
-    const font = twoCols
-      ? clamp((USABLE / perCol) * 0.42, 14, 30)
-      : clamp((USABLE / perCol) * 0.44, 18, 42);
-    const priceFont = Math.max(12, Math.round(font * 0.82));
-    const lineH = font * 1.3;
-    const gap = twoCols
-      ? clamp((USABLE - perCol * lineH) / perCol, 5, 80)
-      : clamp((USABLE - perCol * lineH) / perCol, 6, 120);
-
-    const row = p => ({
-      columns: [
-        { text: p.name, bold: true, fontSize: font, width: "*" },
-        { text: `${fmtNum(salePrice(p), 0)} ${c}`, bold: true, fontSize: priceFont, color: "#6B3F1D", width: "auto", margin: [8, Math.round((font - priceFont) * 0.5), 0, 0] },
-      ],
-      columnGap: 12,
-      margin: [0, 0, 0, gap],
-    });
-
-    if (twoCols) {
-      const half = Math.ceil(n / 2);
-      content.push({
-        columns: [
-          { width: "*", stack: g.list.slice(0, half).map(row) },
-          { width: "*", stack: g.list.slice(half).map(row) },
+  let firstPage = true;
+  groups.forEach(g => {
+    // Кожні PER_PAGE виробів — окремий аркуш зі своєю шапкою категорії.
+    // Аркуш (шапка + рядки) неподільний, щоб pdfmake не рвав його між сторінками.
+    for (let i = 0; i < g.list.length; i += PER_PAGE) {
+      const block = {
+        unbreakable: true,
+        stack: [
+          categoryHeader(g.id, g.label),
+          { stack: g.list.slice(i, i + PER_PAGE).map(row) },
         ],
-        columnGap: 34,
-      });
-    } else {
-      content.push({ stack: g.list.map(row) });
+      };
+      if (!firstPage) block.pageBreak = "before";
+      firstPage = false;
+      content.push(block);
     }
   });
 
