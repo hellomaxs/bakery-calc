@@ -1,8 +1,9 @@
-const CACHE = "bakery-calc-v9";
+const CACHE = "bakery-calc-v10";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
+  "./splash.svg",
   "./app.js",
   "./xlsx-import.js",
   "./export-docs.js",
