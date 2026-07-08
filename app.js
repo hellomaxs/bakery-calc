@@ -7,6 +7,8 @@ const state = {
   data: { settings: { currency: "₴" }, materials: [], products: [] },
   tab: "vitrina",
   vitrinaFilter: "all",
+  cardsFilter: "all",
+  cardsSearch: "",
   stockFilter: "all",
   stockSearch: "",
 };
@@ -519,14 +521,13 @@ function openProductView(id) {
 }
 
 /* ================== Тех карты ================== */
-function renderCards() {
-  const items = state.data.products;
+function cardsListHtml() {
+  const q = state.cardsSearch.trim().toLowerCase();
+  let items = state.data.products;
+  if (state.cardsFilter !== "all") items = items.filter(p => p.category === state.cardsFilter);
+  if (q) items = items.filter(p => p.name.toLowerCase().includes(q));
   if (!items.length) {
-    return `<div class="empty">
-      ${placeholderSvg("bakery", 56)}
-      <p>Поки немає жодної тех карти.</p>
-      <button class="btn" data-new-product>Додати виріб</button>
-    </div>`;
+    return `<div class="empty" style="padding:32px 24px"><p>Нічого не знайдено</p></div>`;
   }
   /* группируем по категориям в порядке CATEGORIES */
   const groups = CATEGORIES.filter(c => items.some(p => p.category === c.id));
@@ -595,6 +596,32 @@ function renderCards() {
     html += `<div class="section-title">Інше</div><div class="list">` + ungrouped.map(renderItem).join("") + `</div>`;
   }
   return html;
+}
+
+function renderCards() {
+  if (!state.data.products.length) {
+    return `<div class="empty">
+      ${placeholderSvg("bakery", 56)}
+      <p>Поки немає жодної тех карти.</p>
+      <button class="btn" data-new-product>Додати виріб</button>
+    </div>`;
+  }
+  const cats = CATEGORIES.filter(c => state.data.products.some(p => p.category === c.id));
+  if (state.cardsFilter !== "all" && !cats.some(c => c.id === state.cardsFilter)) state.cardsFilter = "all";
+
+  const top = `
+    <div class="stock-top">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input class="input" id="cardsSearch" type="search" placeholder="Пошук по назві" value="${esc(state.cardsSearch)}" autocomplete="off">
+      </div>
+      <div class="chips">
+        <button class="chip icon-chip ${state.cardsFilter === "all" ? "is-active" : ""}" data-cards-filter="all">${GROUP_ICONS.all}Усі</button>
+        ${cats.map(c => `<button class="chip icon-chip ${state.cardsFilter === c.id ? "is-active" : ""}" data-cards-filter="${c.id}">${catLineIcon(c.id)}${c.label}</button>`).join("")}
+      </div>
+    </div>`;
+
+  return top + `<div id="cardsList">${cardsListHtml()}</div>`;
 }
 
 /* ---------- Редактор изделия ---------- */
@@ -1153,6 +1180,15 @@ document.getElementById("view").addEventListener("click", e => {
     return;
   }
 
+  const cChip = e.target.closest(".chip[data-cards-filter]");
+  if (cChip) {
+    state.cardsFilter = cChip.dataset.cardsFilter;
+    document.querySelectorAll("[data-cards-filter]").forEach(c =>
+      c.classList.toggle("is-active", c.dataset.cardsFilter === state.cardsFilter));
+    document.getElementById("cardsList").innerHTML = cardsListHtml();
+    return;
+  }
+
   const openP = e.target.closest("[data-open-product]");
   if (openP) { openProductView(openP.dataset.openProduct); return; }
 
@@ -1195,6 +1231,11 @@ document.getElementById("view").addEventListener("input", e => {
   if (e.target.id === "stockSearch") {
     state.stockSearch = e.target.value;
     document.getElementById("stockList").innerHTML = stockListHtml();
+    return;
+  }
+  if (e.target.id === "cardsSearch") {
+    state.cardsSearch = e.target.value;
+    document.getElementById("cardsList").innerHTML = cardsListHtml();
     return;
   }
   const inp = e.target.closest("[data-markup]");
