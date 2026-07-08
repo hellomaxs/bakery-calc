@@ -297,58 +297,92 @@ function buildMenuPdfDoc() {
   };
 }
 
-/* ---------- PDF друк тех карт: крупні назви + компактний склад, без цін ---------- */
+/* Тех карти по категоріях, всередині категорії — за алфавітом (укр). */
+function techPrintGroups() {
+  const collator = new Intl.Collator("uk");
+  const byName = (a, b) => collator.compare(a.name || "", b.name || "");
+  const groups = [];
+  for (const cat of CATEGORIES) {
+    const list = state.data.products.filter(p => p.category === cat.id).sort(byName);
+    if (list.length) groups.push({ label: cat.label, list });
+  }
+  const other = state.data.products.filter(p => !CATEGORIES.some(c => c.id === p.category)).sort(byName);
+  if (other.length) groups.push({ label: "Інше", list: other });
+  return groups;
+}
+
+/* ---------- PDF друк тех карт: формат складського документа, але без грошей
+   (без собівартості та ціни продажу), максимально компактно ---------- */
 function buildTechPrintPdfDoc() {
-  const ordered = [];
-  for (const cat of CATEGORIES) ordered.push(...state.data.products.filter(p => p.category === cat.id));
-  ordered.push(...state.data.products.filter(p => !CATEGORIES.some(c => c.id === p.category)));
+  const groups = techPrintGroups();
 
-  const block = p => {
-    const lines = p.components.map(comp => {
-      const ref = compRef(comp);
-      if (!ref) return null;
-      return {
-        columns: [
-          { text: ref.name + (ref.kind === "product" ? " (н/ф)" : ""), fontSize: 8.5, width: "*" },
-          { text: `${fmtNum(comp.brutto, 3)} ${ref.unit}`, fontSize: 8.5, color: "#555555", width: "auto" },
-        ],
-        columnGap: 6,
-      };
-    }).filter(Boolean);
-    return {
-      unbreakable: true,
-      stack: [
-        {
-          table: { widths: ["*"], body: [[{
-            text: p.name, color: "#000000", bold: true, fontSize: 12,
-            fillColor: "#BDE26B", margin: [5, 2, 5, 2],
-          }]] },
-          layout: "noBorders",
-          margin: [0, 0, 0, 1],
-        },
-        { stack: lines, margin: [2, 0, 0, 0] },
-      ],
-      margin: [0, 0, 0, 6],
-    };
-  };
+  const content = [
+    { text: "Технологічні карти", style: "title" },
+    { text: docDateStr(), style: "muted", margin: [0, 0, 0, 6] },
+  ];
 
-  const blocks = ordered.map(block);
-  const half = Math.ceil(blocks.length / 2);
-  const content = blocks.length
-    ? [{
-        columns: [
-          { width: "*", stack: blocks.slice(0, half) },
-          { width: "*", stack: blocks.slice(half) },
+  for (const g of groups) {
+    content.push({ text: g.label, style: "h1" });
+    for (const p of g.list) {
+      const y = prodYield(p);
+      const body = [[
+        { text: "Компонент", style: "th" },
+        { text: "Брутто", style: "thr" },
+        { text: "Нетто", style: "thr" },
+      ]];
+      for (const comp of p.components) {
+        const ref = compRef(comp);
+        if (!ref) continue;
+        body.push([
+          ref.name + (ref.kind === "product" ? " (н/ф)" : ""),
+          { text: `${fmtNum(comp.brutto, 3)} ${ref.unit}`, alignment: "right" },
+          { text: fmtNum(compNetto(comp), 3), alignment: "right" },
+        ]);
+      }
+
+      content.push({
+        unbreakable: p.components.length <= 18,
+        stack: [
+          {
+            table: { widths: ["*"], body: [[{
+              text: `${p.name} — вихід: ${fmtYield(y)}`,
+              bold: true, color: "#000000", fontSize: 9.5,
+              fillColor: "#BDE26B", margin: [5, 1.5, 5, 1.5],
+            }]] },
+            layout: "noBorders", margin: [0, 3, 0, 0],
+          },
+          {
+            table: { headerRows: 1, widths: ["*", 60, 50], body },
+            layout: {
+              hLineWidth: (i, node) => (i === 0 || i === 1 || i === node.table.body.length ? 0.6 : 0.25),
+              vLineWidth: () => 0,
+              hLineColor: () => "#CCCCCC",
+              paddingTop: () => 1, paddingBottom: () => 1,
+            },
+            margin: [0, 1, 0, 4],
+          },
         ],
-        columnGap: 18,
-      }]
-    : [{ text: "Немає тех карт", fontSize: 11, color: "#777777" }];
+      });
+    }
+  }
+
+  if (!groups.length) content.push({ text: "Немає тех карт", fontSize: 11, color: "#777777" });
 
   return {
     pageSize: "A4",
-    pageMargins: [26, 26, 26, 26],
+    pageMargins: [30, 30, 30, 32],
+    footer: (page, pages) => ({
+      text: `${page} / ${pages}`, alignment: "center", fontSize: 8, color: "#888888", margin: [0, 10, 0, 0],
+    }),
     content,
-    defaultStyle: { font: "Menu", fontSize: 9, lineHeight: 1.05 },
+    defaultStyle: { font: "Menu", fontSize: 8.5, lineHeight: 1.02 },
+    styles: {
+      title: { fontSize: 15, bold: true },
+      muted: { fontSize: 8.5, color: "#777777" },
+      h1: { fontSize: 11.5, bold: true, margin: [0, 7, 0, 3] },
+      th: { bold: true, fontSize: 8, color: "#555555" },
+      thr: { bold: true, fontSize: 8, color: "#555555", alignment: "right" },
+    },
   };
 }
 
