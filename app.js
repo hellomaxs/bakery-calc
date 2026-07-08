@@ -712,16 +712,22 @@ function renderStock() {
 
   return list + `
     <div class="backup">
-      <p>Данные хранятся на этом устройстве · Валюта:
+      <p>Экспорт тех карт и склада</p>
+      <div class="btns">
+        <button class="btn ghost small" data-export-xlsx>Excel</button>
+        <button class="btn ghost small" data-export-pdf>PDF</button>
+        <button class="btn ghost small" data-export>JSON</button>
+      </div>
+      <p style="margin-top:14px">Импорт</p>
+      <div class="btns">
+        <button class="btn ghost small" data-import-xlsx>Из Excel</button>
+        <button class="btn ghost small" data-import>Из JSON</button>
+      </div>
+      <p style="margin-top:14px">Данные хранятся на этом устройстве · Валюта:
         <select id="curSelect" style="border:0;background:none;color:var(--primary);font-weight:600">
           ${["₽", "₴", "€", "$", "₸"].map(c => `<option value="${c}" ${cur() === c ? "selected" : ""}>${c}</option>`).join("")}
         </select>
       </p>
-      <div class="btns">
-        <button class="btn ghost small" data-export>Экспорт</button>
-        <button class="btn ghost small" data-import>Импорт</button>
-        <button class="btn ghost small" data-import-xlsx>Импорт из Excel</button>
-      </div>
       <input type="file" id="importInput" accept="application/json,.json" hidden>
       <input type="file" id="importXlsxInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
     </div>`;
@@ -926,6 +932,23 @@ document.getElementById("view").addEventListener("click", e => {
   if (newM) { openMaterialEditor(null); return; }
 
   if (e.target.closest("[data-export]")) { exportData(); return; }
+  if (e.target.closest("[data-export-xlsx]")) {
+    toast("Готовлю Excel…");
+    loadScript("vendor/xlsx.full.min.js")
+      .then(() => loadScript("export-docs.js"))
+      .then(() => window.exportExcelFile())
+      .catch(() => toast("Нет сети — попробуйте позже"));
+    return;
+  }
+  if (e.target.closest("[data-export-pdf]")) {
+    toast("Готовлю PDF…");
+    loadScript("vendor/pdfmake.min.js")
+      .then(() => loadScript("vendor/vfs_fonts.js"))
+      .then(() => loadScript("export-docs.js"))
+      .then(() => window.exportPdfFile())
+      .catch(() => toast("Нет сети — попробуйте позже"));
+    return;
+  }
   if (e.target.closest("[data-import]")) { document.getElementById("importInput").click(); return; }
   if (e.target.closest("[data-import-xlsx]")) { document.getElementById("importXlsxInput").click(); return; }
 });
