@@ -24,9 +24,21 @@ function catLabel(id) {
   return c ? c.label : id;
 }
 
-/* Круглая иконка-аватар (бренд пекарни): в чипах витрины и в PDF-меню */
-const AVATAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="58" height="58" viewBox="0 0 58 58"><circle cx="29" cy="29" r="27.5" fill="#6B3F1D" stroke="#E9C08A" stroke-width="2"/><path d="M17 31c-2-1-3.2-2.6-3.2-4.7C13.8 22 19 19 29 19s15.2 3 15.2 7.3c0 2.1-1.2 3.7-3.2 4.7" fill="none" stroke="#F3E3C3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 29c0 6.2 6.3 11 14 11s14-4.8 14-11" fill="none" stroke="#F3E3C3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 26.5v5.5M29 25.5v6.5M34 26.5v5.5" stroke="#F3E3C3" stroke-width="2.2" stroke-linecap="round"/></svg>`;
-window.AVATAR_SVG = AVATAR_SVG;
+/* Иконки категорий изделий: контур (для чипов) + круглый бейдж (для PDF-меню) */
+const CAT_GLYPHS = {
+  bakery: `<path d="M4 13c-1.2-.6-2-1.5-2-2.8C2 7.5 6.5 5 12 5s10 2.5 10 5.2c0 1.3-.8 2.2-2 2.8"/><path d="M4 13c0 3 3.6 6 8 6s8-3 8-6"/><path d="M9 8.5v3M12 8v3.5M15 8.5v3"/>`,
+  fried: `<ellipse cx="10" cy="12" rx="7.5" ry="4.5"/><path d="M17.2 10.5l4.8-2.2"/>`,
+  snacks: `<path d="M4 10a8 4 0 0 1 16 0H4z"/><path d="M4 13h16"/><path d="M5 16h14a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3z"/>`,
+  drinks: `<path d="M17 8h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8z"/><path d="M8 2.5c0 1-.8 1-.8 2s.8 1 .8 2M12 2.5c0 1-.8 1-.8 2s.8 1 .8 2"/>`,
+  nf: `<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/>`,
+};
+function catLineIcon(id) {
+  return `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${CAT_GLYPHS[id] || ""}</svg>`;
+}
+function catBadgeSvg(id) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56"><circle cx="28" cy="28" r="26.5" fill="#6B3F1D" stroke="#E9C08A" stroke-width="2"/><g fill="none" stroke="#F3E3C3" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" transform="translate(11 11) scale(1.4)">${CAT_GLYPHS[id] || ""}</g></svg>`;
+}
+window.catBadgeSvg = catBadgeSvg;
 
 /* Группы сырья на складе */
 const MAT_GROUPS = [
@@ -403,6 +415,12 @@ document.getElementById("themeToggle").addEventListener("click", () => {
   applyTheme();
 });
 
+document.getElementById("printCards").addEventListener("click", () => {
+  if (!state.data.products.length) { toast("Немає тех карт для друку"); return; }
+  toast("Готую PDF тех карт…");
+  loadPdfLibs().then(() => window.exportTechPrint()).catch(() => toast("Немає мережі — спробуйте пізніше"));
+});
+
 /* ================== Вкладки ================== */
 const TAB_TITLES = { vitrina: "Вітрина", cards: "Тех карти", stock: "Склад сировини" };
 
@@ -413,6 +431,7 @@ function switchTab(tab) {
   const action = document.getElementById("headerAction");
   action.hidden = tab === "vitrina";
   document.getElementById("themeToggle").hidden = tab !== "cards";
+  document.getElementById("printCards").hidden = tab !== "cards";
   render();
   document.getElementById("view").scrollTop = 0;
   window.scrollTo(0, 0);
@@ -433,11 +452,10 @@ function renderVitrina() {
   if (filter !== "all" && !cats.some(c => c.id === filter)) state.vitrinaFilter = "all";
   const items = displayed.filter(p => state.vitrinaFilter === "all" || p.category === state.vitrinaFilter);
 
-  const av = `<span class="chip-av">${AVATAR_SVG}</span>`;
   const chips = `
     <div class="chips" role="tablist">
-      <button class="chip icon-chip ${state.vitrinaFilter === "all" ? "is-active" : ""}" data-filter="all">${av}Усі</button>
-      ${cats.map(c => `<button class="chip icon-chip ${state.vitrinaFilter === c.id ? "is-active" : ""}" data-filter="${c.id}">${av}${c.label}</button>`).join("")}
+      <button class="chip icon-chip ${state.vitrinaFilter === "all" ? "is-active" : ""}" data-filter="all">${GROUP_ICONS.all}Усі</button>
+      ${cats.map(c => `<button class="chip icon-chip ${state.vitrinaFilter === c.id ? "is-active" : ""}" data-filter="${c.id}">${catLineIcon(c.id)}${c.label}</button>`).join("")}
     </div>`;
 
   if (!items.length) {
@@ -941,19 +959,12 @@ function renderStock() {
       <div class="btns">
         <button class="btn ghost small" data-export-xlsx>Excel</button>
         <button class="btn ghost small" data-export-pdf>PDF</button>
-        <button class="btn ghost small" data-export>JSON</button>
       </div>
       <p style="margin-top:14px">Імпорт</p>
       <div class="btns">
-        <button class="btn ghost small" data-import-xlsx>З Excel</button>
-        <button class="btn ghost small" data-import>З JSON</button>
+        <button class="btn ghost small" data-import-xlsx>Excel</button>
       </div>
-      <p style="margin-top:14px">Дані зберігаються на цьому пристрої · Валюта:
-        <select id="curSelect" style="border:0;background:none;color:var(--primary);font-weight:600">
-          ${["₴", "₽", "€", "$", "₸"].map(c => `<option value="${c}" ${cur() === c ? "selected" : ""}>${c}</option>`).join("")}
-        </select>
-      </p>
-      <input type="file" id="importInput" accept="application/json,.json" hidden>
+      <p style="margin-top:14px">Дані зберігаються на цьому пристрої · валюта ₴</p>
       <input type="file" id="importXlsxInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
     </div>`;
 }
@@ -1075,16 +1086,6 @@ function openMaterialEditor(id) {
 }
 
 /* ================== Экспорт / импорт ================== */
-function exportData() {
-  const blob = new Blob([JSON.stringify(state.data, null, 2)], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  const d = new Date();
-  a.download = `pekarnya-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-  toast("Файл з даними збережено");
-}
 const loadedScripts = {};
 function loadScript(src) {
   if (!loadedScripts[src]) {
@@ -1097,6 +1098,13 @@ function loadScript(src) {
     });
   }
   return loadedScripts[src];
+}
+/* PDF-библиотеки + встроенный шрифт с кириллицей и ₴ */
+function loadPdfLibs() {
+  return loadScript("vendor/pdfmake.min.js")
+    .then(() => loadScript("vendor/vfs_fonts.js"))
+    .then(() => loadScript("vendor/menu-font.js"))
+    .then(() => loadScript("export-docs.js"));
 }
 
 async function importXlsx(file) {
@@ -1119,25 +1127,6 @@ async function importXlsx(file) {
   } catch (e) {
     toast("Не вдалося розібрати файл — потрібен Excel з калькуляційними картами");
   }
-}
-
-function importData(file) {
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const data = JSON.parse(reader.result);
-      if (!Array.isArray(data.materials) || !Array.isArray(data.products)) throw new Error("bad format");
-      if (!data.settings) data.settings = { currency: cur() };
-      ensureGroups(data);
-      if (!confirm(`Замінити всі поточні дані даними з файлу?\n(${data.materials.length} поз. сировини, ${data.products.length} виробів)`)) return;
-      state.data = data;
-      save(); render();
-      toast("Дані імпортовано");
-    } catch {
-      toast("Не вдалося прочитати файл — це не резервна копія застосунку");
-    }
-  };
-  reader.readAsText(file);
 }
 
 /* ================== Глобальные обработчики ================== */
@@ -1181,7 +1170,6 @@ document.getElementById("view").addEventListener("click", e => {
   const newM = e.target.closest("[data-new-material]");
   if (newM) { openMaterialEditor(null); return; }
 
-  if (e.target.closest("[data-export]")) { exportData(); return; }
   if (e.target.closest("[data-export-xlsx]")) {
     toast("Готую Excel…");
     loadScript("vendor/xlsx.full.min.js")
@@ -1192,23 +1180,14 @@ document.getElementById("view").addEventListener("click", e => {
   }
   if (e.target.closest("[data-print-vitrina]")) {
     toast("Готую PDF меню…");
-    loadScript("vendor/pdfmake.min.js")
-      .then(() => loadScript("vendor/vfs_fonts.js"))
-      .then(() => loadScript("export-docs.js"))
-      .then(() => window.exportMenuPdf())
-      .catch(() => toast("Немає мережі — спробуйте пізніше"));
+    loadPdfLibs().then(() => window.exportMenuPdf()).catch(() => toast("Немає мережі — спробуйте пізніше"));
     return;
   }
   if (e.target.closest("[data-export-pdf]")) {
     toast("Готую PDF…");
-    loadScript("vendor/pdfmake.min.js")
-      .then(() => loadScript("vendor/vfs_fonts.js"))
-      .then(() => loadScript("export-docs.js"))
-      .then(() => window.exportPdfFile())
-      .catch(() => toast("Немає мережі — спробуйте пізніше"));
+    loadPdfLibs().then(() => window.exportPdfFile()).catch(() => toast("Немає мережі — спробуйте пізніше"));
     return;
   }
-  if (e.target.closest("[data-import]")) { document.getElementById("importInput").click(); return; }
   if (e.target.closest("[data-import-xlsx]")) { document.getElementById("importXlsxInput").click(); return; }
 });
 
@@ -1237,17 +1216,6 @@ document.getElementById("view").addEventListener("change", e => {
       save();
       toast(p.onDisplay ? "Виставлено на вітрину" : "Прибрано з вітрини");
     }
-    return;
-  }
-  if (e.target.id === "curSelect") {
-    state.data.settings.currency = e.target.value;
-    save();
-    toast("Валюта: " + e.target.value);
-    return;
-  }
-  if (e.target.id === "importInput" && e.target.files[0]) {
-    importData(e.target.files[0]);
-    e.target.value = "";
     return;
   }
   if (e.target.id === "importXlsxInput" && e.target.files[0]) {

@@ -189,7 +189,7 @@ function buildPdfDoc() {
       text: `${page} / ${pages}`, alignment: "center", fontSize: 8, color: "#888888", margin: [0, 14, 0, 0],
     }),
     content,
-    defaultStyle: { fontSize: 9, lineHeight: 1.15 },
+    defaultStyle: { font: "Menu", fontSize: 9, lineHeight: 1.15 },
     styles: {
       title: { fontSize: 16, bold: true },
       muted: { fontSize: 9, color: "#777777" },
@@ -212,23 +212,23 @@ function buildMenuPdfDoc() {
   const groups = [];
   for (const cat of CATEGORIES) {
     const list = displayed.filter(p => p.category === cat.id);
-    if (list.length) groups.push({ label: cat.label, list });
+    if (list.length) groups.push({ id: cat.id, label: cat.label, list });
   }
   const other = displayed.filter(p => !CATEGORIES.some(cat => cat.id === p.category));
-  if (other.length) groups.push({ label: "Інше", list: other });
+  if (other.length) groups.push({ id: null, label: "Інше", list: other });
 
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(v)));
   const USABLE = 640; // приблизна висота під шапкою на A4 (для рівномірного заповнення)
 
-  /* Шапка категорії: круглий аватар зліва + коричнева смуга з білою назвою.
-     Аватар (56) вищий за смугу (~38) — виходить за її межі зверху та знизу. */
-  function categoryHeader(label) {
+  /* Шапка категорії: круглий бейдж категорії зліва + коричнева смуга з білою назвою.
+     Бейдж (56) вищий за смугу (~38) — виходить за її межі зверху та знизу. */
+  function categoryHeader(id, label) {
     return {
       columns: [
-        { width: 56, svg: AVATAR_SVG, margin: [0, 0, 0, 0] },
+        { width: 56, svg: window.catBadgeSvg(id), margin: [0, 0, 0, 0] },
         {
           width: "*",
-          margin: [0, 9, 0, 0], // центрує смугу 38 у межах аватара 56: (56-38)/2 = 9
+          margin: [0, 9, 0, 0], // центрує смугу 38 у межах бейджа 56: (56-38)/2 = 9
           table: { widths: ["*"], body: [[{
             text: label.toUpperCase(),
             color: "#FFFFFF", bold: true, fontSize: 22, alignment: "center",
@@ -244,7 +244,7 @@ function buildMenuPdfDoc() {
 
   const content = [];
   groups.forEach((g, gi) => {
-    const header = categoryHeader(g.label);
+    const header = categoryHeader(g.id, g.label);
     if (gi > 0) header.pageBreak = "before";
     content.push(header);
 
@@ -293,8 +293,67 @@ function buildMenuPdfDoc() {
       canvas: [{ type: "rect", x: 20, y: 20, w: size.width - 40, h: size.height - 40, r: 16, lineWidth: 1, lineColor: "#6B3F1D" }],
     }),
     content,
-    defaultStyle: { fontSize: 12, lineHeight: 1.15 },
+    defaultStyle: { font: "Menu", fontSize: 12, lineHeight: 1.15 },
   };
+}
+
+/* ---------- PDF друк тех карт: крупні назви + компактний склад, без цін ---------- */
+function buildTechPrintPdfDoc() {
+  const ordered = [];
+  for (const cat of CATEGORIES) ordered.push(...state.data.products.filter(p => p.category === cat.id));
+  ordered.push(...state.data.products.filter(p => !CATEGORIES.some(c => c.id === p.category)));
+
+  const block = p => {
+    const lines = p.components.map(comp => {
+      const ref = compRef(comp);
+      if (!ref) return null;
+      return {
+        columns: [
+          { text: ref.name + (ref.kind === "product" ? " (н/ф)" : ""), fontSize: 8.5, width: "*" },
+          { text: `${fmtNum(comp.brutto, 3)} ${ref.unit}`, fontSize: 8.5, color: "#555555", width: "auto" },
+        ],
+        columnGap: 6,
+      };
+    }).filter(Boolean);
+    return {
+      unbreakable: true,
+      stack: [
+        {
+          table: { widths: ["*"], body: [[{
+            text: p.name, color: "#000000", bold: true, fontSize: 12,
+            fillColor: "#BDE26B", margin: [5, 2, 5, 2],
+          }]] },
+          layout: "noBorders",
+          margin: [0, 0, 0, 1],
+        },
+        { stack: lines, margin: [2, 0, 0, 0] },
+      ],
+      margin: [0, 0, 0, 6],
+    };
+  };
+
+  const blocks = ordered.map(block);
+  const half = Math.ceil(blocks.length / 2);
+  const content = blocks.length
+    ? [{
+        columns: [
+          { width: "*", stack: blocks.slice(0, half) },
+          { width: "*", stack: blocks.slice(half) },
+        ],
+        columnGap: 18,
+      }]
+    : [{ text: "Немає тех карт", fontSize: 11, color: "#777777" }];
+
+  return {
+    pageSize: "A4",
+    pageMargins: [26, 26, 26, 26],
+    content,
+    defaultStyle: { font: "Menu", fontSize: 9, lineHeight: 1.05 },
+  };
+}
+
+function exportTechPrint() {
+  pdfMake.createPdf(buildTechPrintPdfDoc()).download(`tehkarty-druk-${docFileStamp()}.pdf`);
 }
 
 function exportMenuPdf() {
@@ -304,6 +363,8 @@ function exportMenuPdf() {
 window.exportExcelFile = exportExcelFile;
 window.exportPdfFile = exportPdfFile;
 window.exportMenuPdf = exportMenuPdf;
+window.exportTechPrint = exportTechPrint;
 window.buildExcelWorkbook = buildExcelWorkbook;
 window.buildPdfDoc = buildPdfDoc;
 window.buildMenuPdfDoc = buildMenuPdfDoc;
+window.buildTechPrintPdfDoc = buildTechPrintPdfDoc;

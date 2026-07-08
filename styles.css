@@ -258,8 +258,6 @@ img { max-width: 100%; display: block; }
 .btn.block { width: 100%; }
 
 .print-btn { margin: 0 0 14px; letter-spacing: .04em; }
-.chip-av { width: 20px; height: 20px; flex: 0 0 auto; display: inline-flex; margin-left: -4px; }
-.chip-av svg { width: 20px; height: 20px; display: block; border-radius: 50%; }
 
 /* ===== Пустые состояния ===== */
 .empty { text-align: center; padding: 56px 24px; color: var(--text-2); }
