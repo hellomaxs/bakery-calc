@@ -1,4 +1,4 @@
-const CACHE = "bakery-calc-v7";
+const CACHE = "bakery-calc-v8";
 const ASSETS = [
   "./",
   "./index.html",
@@ -11,6 +11,8 @@ const ASSETS = [
   "./vendor/vfs_fonts.js",
   "./vendor/menu-font.js",
   "./manifest.webmanifest",
+  "./favicon.svg",
+  "./icons/favicon-32.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "./icons/apple-touch-icon.png",
