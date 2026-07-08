@@ -205,7 +205,7 @@ function exportPdfFile() {
   pdfMake.createPdf(buildPdfDoc()).download(`tehkarty-${docFileStamp()}.pdf`);
 }
 
-/* ---------- PDF меню: категорія на окремому аркуші, дві колонки, без грамовки ---------- */
+/* ---------- PDF меню: категорія на окремому аркуші, крупні назви, без грамовки ---------- */
 function buildMenuPdfDoc() {
   const c = cur();
   const displayed = state.data.products.filter(p => p.onDisplay);
@@ -217,43 +217,83 @@ function buildMenuPdfDoc() {
   const other = displayed.filter(p => !CATEGORIES.some(cat => cat.id === p.category));
   if (other.length) groups.push({ label: "Інше", list: other });
 
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(v)));
+  const USABLE = 640; // приблизна висота під шапкою на A4 (для рівномірного заповнення)
+
+  /* Шапка категорії: круглий аватар зліва + коричнева смуга з білою назвою.
+     Аватар (56) вищий за смугу (~38) — виходить за її межі зверху та знизу. */
+  function categoryHeader(label) {
+    return {
+      columns: [
+        { width: 56, svg: AVATAR_SVG, margin: [0, 0, 0, 0] },
+        {
+          width: "*",
+          margin: [0, 9, 0, 0], // центрує смугу 38 у межах аватара 56: (56-38)/2 = 9
+          table: { widths: ["*"], body: [[{
+            text: label.toUpperCase(),
+            color: "#FFFFFF", bold: true, fontSize: 22, alignment: "center",
+            fillColor: "#6B3F1D", margin: [12, 7, 12, 7],
+          }]] },
+          layout: "noBorders",
+        },
+      ],
+      columnGap: 12,
+      margin: [0, 0, 0, 22],
+    };
+  }
+
   const content = [];
   groups.forEach((g, gi) => {
-    content.push({
-      table: { widths: ["*"], body: [[{
-        text: g.label.toUpperCase(),
-        color: "#FFFFFF", bold: true, fontSize: 24, alignment: "center",
-        fillColor: "#6B3F1D", margin: [10, 12, 10, 12],
-      }]] },
-      layout: "noBorders",
-      margin: [0, 0, 0, 20],
-      ...(gi > 0 ? { pageBreak: "before" } : {}),
-    });
-    const rows = g.list.map(p => ({
+    const header = categoryHeader(g.label);
+    if (gi > 0) header.pageBreak = "before";
+    content.push(header);
+
+    const n = g.list.length;
+    const twoCols = n > 15;
+    const perCol = twoCols ? Math.ceil(n / 2) : n;
+    const font = twoCols
+      ? clamp((USABLE / perCol) * 0.42, 14, 30)
+      : clamp((USABLE / perCol) * 0.44, 18, 42);
+    const priceFont = Math.max(12, Math.round(font * 0.82));
+    const lineH = font * 1.3;
+    const gap = twoCols
+      ? clamp((USABLE - perCol * lineH) / perCol, 5, 80)
+      : clamp((USABLE - perCol * lineH) / perCol, 6, 120);
+
+    const row = p => ({
       columns: [
-        { text: p.name, bold: true, fontSize: 12 },
-        { text: `${fmtNum(salePrice(p), 0)} ${c}`, bold: true, fontSize: 12, width: "auto", color: "#6B3F1D" },
+        { text: p.name, bold: true, fontSize: font, width: "*" },
+        { text: `${fmtNum(salePrice(p), 0)} ${c}`, bold: true, fontSize: priceFont, color: "#6B3F1D", width: "auto", margin: [8, Math.round((font - priceFont) * 0.5), 0, 0] },
       ],
-      columnGap: 10,
-      margin: [0, 0, 0, 11],
-    }));
-    const half = Math.ceil(rows.length / 2);
-    content.push({
-      columns: [
-        { width: "*", stack: rows.slice(0, half) },
-        { width: "*", stack: rows.slice(half) },
-      ],
-      columnGap: 28,
+      columnGap: 12,
+      margin: [0, 0, 0, gap],
     });
+
+    if (twoCols) {
+      const half = Math.ceil(n / 2);
+      content.push({
+        columns: [
+          { width: "*", stack: g.list.slice(0, half).map(row) },
+          { width: "*", stack: g.list.slice(half).map(row) },
+        ],
+        columnGap: 34,
+      });
+    } else {
+      content.push({ stack: g.list.map(row) });
+    }
   });
 
-  if (!groups.length) content.push({ text: "На вітрині немає жодного виробу", fontSize: 11, color: "#777777" });
+  if (!groups.length) content.push({ text: "На вітрині немає жодного виробу", fontSize: 12, color: "#777777" });
 
   return {
     pageSize: "A4",
-    pageMargins: [40, 40, 40, 40],
+    pageMargins: [44, 40, 44, 40],
+    // тонка рамка із заокругленими кутами на кожному аркуші
+    background: (page, size) => ({
+      canvas: [{ type: "rect", x: 20, y: 20, w: size.width - 40, h: size.height - 40, r: 16, lineWidth: 1, lineColor: "#6B3F1D" }],
+    }),
     content,
-    defaultStyle: { fontSize: 11, lineHeight: 1.2 },
+    defaultStyle: { fontSize: 12, lineHeight: 1.15 },
   };
 }
 

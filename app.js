@@ -24,6 +24,10 @@ function catLabel(id) {
   return c ? c.label : id;
 }
 
+/* Круглая иконка-аватар (бренд пекарни): в чипах витрины и в PDF-меню */
+const AVATAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="58" height="58" viewBox="0 0 58 58"><circle cx="29" cy="29" r="27.5" fill="#6B3F1D" stroke="#E9C08A" stroke-width="2"/><path d="M17 31c-2-1-3.2-2.6-3.2-4.7C13.8 22 19 19 29 19s15.2 3 15.2 7.3c0 2.1-1.2 3.7-3.2 4.7" fill="none" stroke="#F3E3C3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 29c0 6.2 6.3 11 14 11s14-4.8 14-11" fill="none" stroke="#F3E3C3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M24 26.5v5.5M29 25.5v6.5M34 26.5v5.5" stroke="#F3E3C3" stroke-width="2.2" stroke-linecap="round"/></svg>`;
+window.AVATAR_SVG = AVATAR_SVG;
+
 /* Группы сырья на складе */
 const MAT_GROUPS = [
   { id: "dairy", label: "Молочка" },
@@ -429,10 +433,11 @@ function renderVitrina() {
   if (filter !== "all" && !cats.some(c => c.id === filter)) state.vitrinaFilter = "all";
   const items = displayed.filter(p => state.vitrinaFilter === "all" || p.category === state.vitrinaFilter);
 
+  const av = `<span class="chip-av">${AVATAR_SVG}</span>`;
   const chips = `
     <div class="chips" role="tablist">
-      <button class="chip ${state.vitrinaFilter === "all" ? "is-active" : ""}" data-filter="all">Усі</button>
-      ${cats.map(c => `<button class="chip ${state.vitrinaFilter === c.id ? "is-active" : ""}" data-filter="${c.id}">${c.label}</button>`).join("")}
+      <button class="chip icon-chip ${state.vitrinaFilter === "all" ? "is-active" : ""}" data-filter="all">${av}Усі</button>
+      ${cats.map(c => `<button class="chip icon-chip ${state.vitrinaFilter === c.id ? "is-active" : ""}" data-filter="${c.id}">${av}${c.label}</button>`).join("")}
     </div>`;
 
   if (!items.length) {
