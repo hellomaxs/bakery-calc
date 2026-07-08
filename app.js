@@ -273,6 +273,113 @@ function closeSheet(overlay) {
 const closeBtnHtml = `<button class="btn-icon subtle" data-close aria-label="Закрыть">
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
 
+/* ---------- Выбор компонента: поиск + группы + алфавит ---------- */
+function openComponentPicker(excludeProductId, onPick) {
+  const filters = [{ id: "all", label: "Все" }, ...MAT_GROUPS.slice(0, 7),
+    { id: "nf", label: "Полуфабрикаты" }, ...MAT_GROUPS.slice(7)];
+  let q = "", group = "all", letter = null;
+
+  const overlay = openSheet(`
+    <div class="sheet-header"><h2>Выбор компонента</h2>${closeBtnHtml}</div>
+    <div class="sheet-body" style="min-height:min(70dvh,560px)">
+      <div class="search-box">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input class="input" id="cpSearch" type="search" placeholder="Поиск по складу" autocomplete="off">
+      </div>
+      <div class="chips" id="cpGroups">
+        ${filters.map(f => `<button type="button" class="chip icon-chip ${f.id === "all" ? "is-active" : ""}" data-cp-group="${f.id}">${GROUP_ICONS[f.id] || ""}${f.label}</button>`).join("")}
+      </div>
+      <div class="alpha" id="cpAlpha"></div>
+      <div id="cpList" style="padding-bottom:20px"></div>
+    </div>`);
+  const $ = sel => overlay.querySelector(sel);
+
+  function allItems() {
+    const prods = state.data.products
+      .filter(p => p.id !== excludeProductId)
+      .map(p => {
+        const y = prodYield(p);
+        return { kind: "p", id: p.id, name: p.name, icon: GROUP_ICONS.nf, price: prodUnitCost(p), unit: y.unit, isNf: true };
+      });
+    const mats = state.data.materials.map(m =>
+      ({ kind: "m", id: m.id, name: m.name, icon: GROUP_ICONS[matGroup(m)] || GROUP_ICONS.grocery, price: unitPrice(m), unit: m.unit, group: matGroup(m) }));
+    if (group === "nf") return prods;
+    if (group !== "all") return mats.filter(i => i.group === group);
+    return [...mats, ...prods];
+  }
+
+  function rerender() {
+    let items = allItems();
+    const query = q.trim().toLowerCase();
+    if (query) items = items.filter(i => i.name.toLowerCase().includes(query));
+    items.sort((a, b) => a.name.localeCompare(b.name, "uk"));
+
+    const letters = [...new Set(items.map(i => (i.name.trim()[0] || "").toUpperCase()).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, "uk"));
+    if (letter && !letters.includes(letter)) letter = null;
+    $("#cpAlpha").innerHTML = letters.map(l =>
+      `<button type="button" class="${l === letter ? "is-active" : ""}" data-cp-letter="${esc(l)}">${esc(l)}</button>`).join("");
+
+    if (letter) items = items.filter(i => (i.name.trim()[0] || "").toUpperCase() === letter);
+
+    $("#cpList").innerHTML = items.length
+      ? items.map(i => `
+          <button type="button" class="cp-item" data-cp-kind="${i.kind}" data-cp-id="${i.id}">
+            <span class="ic">${i.icon}</span>
+            <span class="nm">${esc(i.name)}${i.isNf ? ' <i class="nf">н/ф</i>' : ""}</span>
+            <span class="pr">${i.price > 0 ? fmtPerUnit(i.price, i.unit) : "без цены"}</span>
+          </button>`).join("")
+      : `<p style="color:var(--text-2);text-align:center;padding:24px 0">Ничего не найдено</p>`;
+  }
+  rerender();
+  $("#cpSearch").focus();
+
+  $("#cpSearch").addEventListener("input", e => { q = e.target.value; rerender(); });
+  $("#cpGroups").addEventListener("click", e => {
+    const b = e.target.closest("[data-cp-group]");
+    if (!b) return;
+    group = b.dataset.cpGroup; letter = null;
+    $("#cpGroups").querySelectorAll(".chip").forEach(x => x.classList.toggle("is-active", x === b));
+    rerender();
+  });
+  $("#cpAlpha").addEventListener("click", e => {
+    const b = e.target.closest("[data-cp-letter]");
+    if (!b) return;
+    letter = letter === b.dataset.cpLetter ? null : b.dataset.cpLetter;
+    rerender();
+  });
+  $("#cpList").addEventListener("click", e => {
+    const b = e.target.closest("[data-cp-id]");
+    if (!b) return;
+    closeSheet(overlay);
+    onPick(b.dataset.cpKind, b.dataset.cpId);
+  });
+}
+
+/* ================== Тема ================== */
+const sunSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>`;
+const moonSvg = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/></svg>`;
+
+function effectiveTheme() {
+  const t = state.data.settings.theme;
+  if (t === "dark" || t === "light") return t;
+  return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+function applyTheme() {
+  const t = state.data.settings.theme;
+  if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
+  else delete document.documentElement.dataset.theme;
+  const btn = document.getElementById("themeToggle");
+  btn.innerHTML = effectiveTheme() === "dark" ? sunSvg : moonSvg;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = effectiveTheme() === "dark" ? "#17110C" : "#F7F1E8";
+}
+document.getElementById("themeToggle").addEventListener("click", () => {
+  state.data.settings.theme = effectiveTheme() === "dark" ? "light" : "dark";
+  save();
+  applyTheme();
+});
+
 /* ================== Вкладки ================== */
 const TAB_TITLES = { vitrina: "Витрина", cards: "Тех карты", stock: "Склад сырья" };
 
@@ -282,6 +389,7 @@ function switchTab(tab) {
   document.getElementById("pageTitle").textContent = TAB_TITLES[tab];
   const action = document.getElementById("headerAction");
   action.hidden = tab === "vitrina";
+  document.getElementById("themeToggle").hidden = tab !== "cards";
   render();
   document.getElementById("view").scrollTop = 0;
   window.scrollTo(0, 0);
@@ -535,19 +643,6 @@ function openProductEditor(id) {
     $("#pPhotoDel").hidden = !draft.photo;
   }
 
-  function refValue(comp) { return comp.productId ? "p:" + comp.productId : "m:" + comp.materialId; }
-  function refOptions(comp) {
-    const sel = refValue(comp);
-    const mats = state.data.materials.map(m =>
-      `<option value="m:${m.id}" ${sel === "m:" + m.id ? "selected" : ""}>${esc(m.name)} (${fmtUnitPrice(m)})</option>`).join("");
-    const prods = state.data.products.filter(p => p.id !== draft.id).map(p => {
-      const y = prodYield(p);
-      return `<option value="p:${p.id}" ${sel === "p:" + p.id ? "selected" : ""}>${esc(p.name)} (${fmtPerUnit(prodUnitCost(p), y.unit)})</option>`;
-    }).join("");
-    return `<optgroup label="Сырьё">${mats}</optgroup>` +
-      (prods ? `<optgroup label="Изделия и полуфабрикаты">${prods}</optgroup>` : "");
-  }
-
   function renderComps() {
     const box = $("#compList");
     if (!draft.components.length) {
@@ -561,7 +656,10 @@ function openProductEditor(id) {
       return `
         <div class="comp-row" data-i="${i}">
           <div class="top">
-            <select class="input" data-f="ref" aria-label="Компонент">${refOptions(comp)}</select>
+            <button type="button" class="input comp-pick" data-pick aria-label="Сменить компонент">
+              <span class="nm">${ref ? esc(ref.name) : "Выбрать компонент"}</span>
+              <span class="pr">${ref ? fmtPerUnit(ref.unitPrice, ref.unit) : ""}</span>
+            </button>
             <button type="button" class="del" data-del-comp aria-label="Удалить компонент">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v13a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V7h10z"/></svg>
             </button>
@@ -635,8 +733,16 @@ function openProductEditor(id) {
 
   // Компоненты
   $("#addComp").addEventListener("click", () => {
-    draft.components.push({ materialId: state.data.materials[0].id, brutto: "", netto: "" });
-    renderComps(); renderTotals();
+    openComponentPicker(draft.id, (kind, refId) => {
+      const comp = { brutto: "", netto: "" };
+      if (kind === "p") comp.productId = refId;
+      else comp.materialId = refId;
+      draft.components.push(comp);
+      renderComps(); renderTotals();
+      const rows = overlay.querySelectorAll(".comp-row");
+      const last = rows[rows.length - 1];
+      if (last) last.querySelector('[data-f="brutto"]').focus();
+    });
   });
   $("#compList").addEventListener("input", e => {
     const row = e.target.closest(".comp-row"); if (!row) return;
@@ -650,22 +756,22 @@ function openProductEditor(id) {
       renderTotals();
     }
   });
-  $("#compList").addEventListener("change", e => {
+  $("#compList").addEventListener("click", e => {
     const row = e.target.closest(".comp-row"); if (!row) return;
     const comp = draft.components[Number(row.dataset.i)];
-    if (e.target.dataset.f === "ref") {
-      const [kind, refId] = [e.target.value.slice(0, 1), e.target.value.slice(2)];
-      delete comp.materialId; delete comp.productId;
-      if (kind === "p") comp.productId = refId;
-      else comp.materialId = refId;
+    if (e.target.closest("[data-pick]")) {
+      openComponentPicker(draft.id, (kind, refId) => {
+        delete comp.materialId; delete comp.productId;
+        if (kind === "p") comp.productId = refId;
+        else comp.materialId = refId;
+        renderComps(); renderTotals();
+      });
+      return;
+    }
+    if (e.target.closest("[data-del-comp]")) {
+      draft.components.splice(Number(row.dataset.i), 1);
       renderComps(); renderTotals();
     }
-  });
-  $("#compList").addEventListener("click", e => {
-    const del = e.target.closest("[data-del-comp]"); if (!del) return;
-    const row = del.closest(".comp-row");
-    draft.components.splice(Number(row.dataset.i), 1);
-    renderComps(); renderTotals();
   });
 
   // Удаление изделия
@@ -1112,7 +1218,7 @@ document.getElementById("view").addEventListener("change", e => {
 });
 
 /* ================== Запуск ================== */
-load().then(() => switchTab("vitrina"));
+load().then(() => { applyTheme(); switchTab("vitrina"); });
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("sw.js").catch(() => {});
