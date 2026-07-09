@@ -125,6 +125,21 @@ async function load() {
       return;
     }
   } catch (e) { /* повреждённые данные — начинаем заново */ }
+  // первый запуск: пробуем предзагруженную базу data.json (есть в деплое Vercel);
+  // если файла нет (напр. GitHub Pages) — демо-данные
+  try {
+    const res = await fetch("data.json", { cache: "no-store" });
+    if (res.ok) {
+      const d = await res.json();
+      if (Array.isArray(d.materials) && Array.isArray(d.products)) {
+        state.data = d;
+        if (!state.data.settings) state.data.settings = { currency: "₴" };
+        ensureGroups(state.data);
+        save();
+        return;
+      }
+    }
+  } catch (e) { /* нет файла/сети — демо */ }
   state.data = seedData();
   save();
 }
