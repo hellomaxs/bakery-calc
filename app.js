@@ -1005,6 +1005,7 @@ function renderStock() {
       <p style="margin-top:14px">Імпорт</p>
       <div class="btns">
         <button class="btn ghost small" data-import-xlsx>Excel</button>
+        <button class="btn ghost small" data-load-base>База ЖИТО-СИТО</button>
       </div>
       <p style="margin-top:14px">Дані зберігаються на цьому пристрої · валюта ₴</p>
       <input type="file" id="importXlsxInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
@@ -1246,6 +1247,19 @@ document.getElementById("view").addEventListener("click", e => {
     return;
   }
   if (e.target.closest("[data-import-xlsx]")) { document.getElementById("importXlsxInput").click(); return; }
+  if (e.target.closest("[data-load-base]")) {
+    fetch("data.json", { cache: "no-store" })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        if (!Array.isArray(d.materials) || !Array.isArray(d.products)) return;
+        if (!confirm(`Завантажити базу ЖИТО-СИТО?\n(${d.materials.length} сировини, ${d.products.length} виробів)\nПоточні дані буде замінено.`)) return;
+        if (!d.settings) d.settings = { currency: "₴" };
+        state.data = d; ensureGroups(state.data); save(); render();
+        toast("Базу завантажено");
+      })
+      .catch(() => toast("Базу не знайдено (доступна лише в застосунку)"));
+    return;
+  }
 });
 
 document.getElementById("view").addEventListener("input", e => {
