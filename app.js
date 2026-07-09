@@ -339,7 +339,7 @@ function openComponentPicker(excludeProductId, onPick) {
         return { kind: "p", id: p.id, name: p.name, icon: GROUP_ICONS.nf, price: prodUnitCost(p), unit: y.unit, isNf: true };
       });
     const mats = state.data.materials.map(m =>
-      ({ kind: "m", id: m.id, name: m.name, icon: GROUP_ICONS[matGroup(m)] || GROUP_ICONS.grocery, price: unitPrice(m), unit: m.unit, group: matGroup(m) }));
+      ({ kind: "m", id: m.id, name: m.name, code: m.code || "", icon: GROUP_ICONS[matGroup(m)] || GROUP_ICONS.grocery, price: unitPrice(m), unit: m.unit, group: matGroup(m) }));
     if (group === "nf") return prods;
     if (group !== "all") return mats.filter(i => i.group === group);
     return [...mats, ...prods];
@@ -348,7 +348,7 @@ function openComponentPicker(excludeProductId, onPick) {
   function rerender() {
     let items = allItems();
     const query = q.trim().toLowerCase();
-    if (query) items = items.filter(i => i.name.toLowerCase().includes(query));
+    if (query) items = items.filter(i => i.name.toLowerCase().includes(query) || String(i.code || "").toLowerCase().includes(query));
     items.sort((a, b) => a.name.localeCompare(b.name, "uk"));
 
     const letters = [...new Set(items.map(i => (i.name.trim()[0] || "").toUpperCase()).filter(Boolean))]
@@ -363,7 +363,7 @@ function openComponentPicker(excludeProductId, onPick) {
       ? items.map(i => `
           <button type="button" class="cp-item" data-cp-kind="${i.kind}" data-cp-id="${i.id}">
             <span class="ic">${i.icon}</span>
-            <span class="nm">${esc(i.name)}${i.isNf ? ' <i class="nf">н/ф</i>' : ""}</span>
+            <span class="nm">${i.code ? `<span class="mcode">${esc(i.code)}</span>` : ""}${esc(i.name)}${i.isNf ? ' <i class="nf">н/ф</i>' : ""}</span>
             <span class="pr">${i.price > 0 ? fmtPerUnit(i.price, i.unit) : "без ціни"}</span>
           </button>`).join("")
       : `<p style="color:var(--text-2);text-align:center;padding:24px 0">Нічого не знайдено</p>`;
@@ -944,7 +944,7 @@ function stockListHtml() {
 
   let items = state.data.materials;
   if (state.stockFilter !== "all") items = items.filter(m => matGroup(m) === state.stockFilter);
-  if (q) items = items.filter(m => m.name.toLowerCase().includes(q));
+  if (q) items = items.filter(m => m.name.toLowerCase().includes(q) || String(m.code || "").toLowerCase().includes(q));
   if (!items.length) {
     return `<div class="empty" style="padding:32px 24px">
       <p>${q || state.stockFilter !== "all" ? "Нічого не знайдено" : "Склад порожній. Додайте першу сировину."}</p>
@@ -957,7 +957,7 @@ function stockListHtml() {
       <div class="row-card mat-row" data-edit-material="${m.id}">
         <div class="ic">${GROUP_ICONS[matGroup(m)] || GROUP_ICONS.grocery}</div>
         <div class="main">
-          <div class="title">${esc(m.name)}</div>
+          <div class="title">${m.code ? `<span class="mcode">${esc(m.code)}</span>` : ""}${esc(m.name)}</div>
           <div class="sub">${m.packPrice > 0
             ? `${fmtNum(m.packQty)} ${m.unit} — ${fmtMoney(m.packPrice)} · <b>${fmtUnitPrice(m)}</b>`
             : `<span style="color:var(--danger)">ціна не вказана</span>`}</div>
@@ -1000,17 +1000,23 @@ function openMaterialEditor(id) {
   const existing = id ? matById(id) : null;
   const draft = existing
     ? { ...existing }
-    : { id: uid(), name: "", unit: "г", packQty: "", packPrice: "", group: null };
+    : { id: uid(), code: "", name: "", unit: "г", packQty: "", packPrice: "", group: null };
   const isNew = !existing;
   if (!draft.group) draft.group = classifyMaterial(draft.name);
 
   const overlay = openSheet(`
     <div class="sheet-header"><h2>${isNew ? "Нова сировина" : "Сировина"}</h2>${closeBtnHtml}</div>
     <div class="sheet-body">
-      <div class="field">
-        <label for="mName">Назва</label>
-        <input class="input" id="mName" value="${esc(draft.name)}" placeholder="Борошно пшеничне в/г" autocomplete="off">
-        <div class="err" id="mNameErr" hidden>Вкажіть назву</div>
+      <div class="form-row">
+        <div class="field" style="flex:0 0 96px">
+          <label for="mCode">Код</label>
+          <input class="input" id="mCode" value="${esc(draft.code || "")}" placeholder="—" autocomplete="off" inputmode="numeric">
+        </div>
+        <div class="field">
+          <label for="mName">Назва</label>
+          <input class="input" id="mName" value="${esc(draft.name)}" placeholder="Борошно пшеничне в/г" autocomplete="off">
+          <div class="err" id="mNameErr" hidden>Вкажіть назву</div>
+        </div>
       </div>
       <div class="field">
         <label>Група</label>
@@ -1103,7 +1109,7 @@ function openMaterialEditor(id) {
     check(price > 0, "mPrice", "mPriceErr");
     if (!ok) return;
 
-    Object.assign(draft, { name, unit: $("#mUnit").value, packQty: qty, packPrice: price, group: draft.group || classifyMaterial(name) });
+    Object.assign(draft, { code: $("#mCode").value.trim(), name, unit: $("#mUnit").value, packQty: qty, packPrice: price, group: draft.group || classifyMaterial(name) });
     const idx = state.data.materials.findIndex(m => m.id === draft.id);
     if (idx >= 0) state.data.materials[idx] = draft;
     else state.data.materials.push(draft);

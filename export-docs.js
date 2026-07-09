@@ -33,23 +33,25 @@ function buildExcelWorkbook() {
   const aoa = [
     [`Калькуляційні карти — ${docDateStr()}`],
     [],
-    ["№", "Компонент", "Од.", "Брутто", "Нетто", `Ціна, ${c}/од`, `Сума, ${c}`],
+    ["№", "Код", "Компонент", "Од.", "Брутто", "Нетто", `Ціна, ${c}/од`, `Сума, ${c}`],
   ];
-  const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
+  const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
 
   for (const g of groupedProducts()) {
     aoa.push([]);
-    merges.push({ s: { r: aoa.length, c: 0 }, e: { r: aoa.length, c: 6 } });
+    merges.push({ s: { r: aoa.length, c: 0 }, e: { r: aoa.length, c: 7 } });
     aoa.push([g.label.toUpperCase()]);
     for (const p of g.list) {
       const y = prodYield(p);
-      merges.push({ s: { r: aoa.length, c: 0 }, e: { r: aoa.length, c: 4 } });
+      merges.push({ s: { r: aoa.length, c: 0 }, e: { r: aoa.length, c: 5 } });
       aoa.push([`${p.name} — вихід: ${fmtYield(y)}`]);
       p.components.forEach((comp, i) => {
         const ref = compRef(comp);
         if (!ref) return;
+        const code = comp.materialId ? (matById(comp.materialId) || {}).code || "" : "";
         aoa.push([
           i + 1,
+          code,
           ref.name + (ref.kind === "product" ? " (н/ф)" : ""),
           ref.unit,
           comp.brutto,
@@ -59,27 +61,27 @@ function buildExcelWorkbook() {
         ]);
       });
       const cost = productCost(p);
-      aoa.push(["", "Собівартість", "", "", "", "", r2(cost)]);
-      aoa.push(["", "Націнка, %", "", "", "", "", Number(p.markup) || 0]);
-      aoa.push(["", "Ціна продажу", "", "", "", "", salePrice(p)]);
+      aoa.push(["", "", "Собівартість", "", "", "", "", r2(cost)]);
+      aoa.push(["", "", "Націнка, %", "", "", "", "", Number(p.markup) || 0]);
+      aoa.push(["", "", "Ціна продажу", "", "", "", "", salePrice(p)]);
     }
   }
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws["!cols"] = [{ wch: 4 }, { wch: 42 }, { wch: 5 }, { wch: 9 }, { wch: 9 }, { wch: 11 }, { wch: 10 }];
+  ws["!cols"] = [{ wch: 4 }, { wch: 7 }, { wch: 42 }, { wch: 5 }, { wch: 9 }, { wch: 9 }, { wch: 11 }, { wch: 10 }];
   ws["!merges"] = merges;
 
   const aoa2 = [
     [`Склад сировини — ${docDateStr()}`],
     [],
-    ["Назва", "Од.", "В упаковці", `Ціна упаковки, ${c}`, `Ціна за од., ${c}`],
+    ["Код", "Назва", "Од.", "В упаковці", `Ціна упаковки, ${c}`, `Ціна за од., ${c}`],
   ];
   for (const m of state.data.materials) {
-    aoa2.push([m.name, m.unit, m.packQty, m.packPrice, m.packQty ? Number((m.packPrice / m.packQty).toFixed(4)) : 0]);
+    aoa2.push([m.code || "", m.name, m.unit, m.packQty, m.packPrice, m.packQty ? Number((m.packPrice / m.packQty).toFixed(4)) : 0]);
   }
   const ws2 = XLSX.utils.aoa_to_sheet(aoa2);
-  ws2["!cols"] = [{ wch: 42 }, { wch: 5 }, { wch: 11 }, { wch: 16 }, { wch: 13 }];
-  ws2["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }];
+  ws2["!cols"] = [{ wch: 7 }, { wch: 42 }, { wch: 5 }, { wch: 11 }, { wch: 16 }, { wch: 13 }];
+  ws2["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Тех карти");
@@ -105,14 +107,16 @@ function buildPdfDoc() {
     for (const p of g.list) {
       const y = prodYield(p);
       const body = [[
-        { text: "Компонент", style: "th" }, { text: "Брутто", style: "thr" },
+        { text: "Код", style: "th" }, { text: "Компонент", style: "th" }, { text: "Брутто", style: "thr" },
         { text: "Нетто", style: "thr" }, { text: `Ціна, ${c}/од`, style: "thr" },
         { text: `Сума, ${c}`, style: "thr" },
       ]];
       for (const comp of p.components) {
         const ref = compRef(comp);
         if (!ref) continue;
+        const code = comp.materialId ? (matById(comp.materialId) || {}).code || "" : "";
         body.push([
+          { text: code, color: "#777777" },
           ref.name + (ref.kind === "product" ? " (н/ф)" : ""),
           { text: `${fmtNum(comp.brutto, 3)} ${ref.unit}`, alignment: "right" },
           { text: fmtNum(compNetto(comp), 3), alignment: "right" },
@@ -122,11 +126,11 @@ function buildPdfDoc() {
       }
       const cost = productCost(p);
       body.push([
-        { text: "Собівартість", bold: true }, "", "", "",
+        { text: "Собівартість", bold: true, colSpan: 2 }, "", "", "", "",
         { text: money(cost), bold: true, alignment: "right" },
       ]);
       body.push([
-        { text: `Ціна продажу (націнка ${fmtNum(p.markup, 0)}%)`, bold: true, color: "#B45309" }, "", "", "",
+        { text: `Ціна продажу (націнка ${fmtNum(p.markup, 0)}%)`, bold: true, color: "#B45309", colSpan: 2 }, "", "", "", "",
         { text: fmtNum(salePrice(p), 0) + " " + c, bold: true, alignment: "right", color: "#B45309" },
       ]);
 
@@ -142,7 +146,7 @@ function buildPdfDoc() {
             layout: "noBorders", margin: [0, 6, 0, 0],
           },
           {
-            table: { headerRows: 1, widths: ["*", 55, 45, 55, 55], body },
+            table: { headerRows: 1, widths: [32, "*", 50, 42, 50, 50], body },
             layout: {
               hLineWidth: (i, node) => (i === 0 || i === 1 || i === node.table.body.length ? 0.7 : 0.3),
               vLineWidth: () => 0,
@@ -321,6 +325,7 @@ function buildTechPrintPdfDoc() {
     for (const p of g.list) {
       const y = prodYield(p);
       const body = [[
+        { text: "Код", style: "th" },
         { text: "Компонент", style: "th" },
         { text: "Брутто", style: "thr" },
         { text: "Нетто", style: "thr" },
@@ -328,7 +333,9 @@ function buildTechPrintPdfDoc() {
       for (const comp of p.components) {
         const ref = compRef(comp);
         if (!ref) continue;
+        const code = comp.materialId ? (matById(comp.materialId) || {}).code || "" : "";
         body.push([
+          { text: code, color: "#555555" },
           ref.name + (ref.kind === "product" ? " (н/ф)" : ""),
           { text: `${fmtNum(comp.brutto, 3)} ${ref.unit}`, alignment: "right" },
           { text: fmtNum(compNetto(comp), 3), alignment: "right" },
@@ -347,7 +354,7 @@ function buildTechPrintPdfDoc() {
             layout: "noBorders", margin: [0, 3, 0, 0],
           },
           {
-            table: { headerRows: 1, widths: ["*", 60, 50], body },
+            table: { headerRows: 1, widths: [40, "*", 58, 48], body },
             layout: {
               hLineWidth: (i, node) => (i === 0 || i === 1 || i === node.table.body.length ? 0.6 : 0.25),
               vLineWidth: () => 0,

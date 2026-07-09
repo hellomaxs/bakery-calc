@@ -99,8 +99,9 @@ function parseCalcCards(arrayBuffer) {
       if (prodByNorm[normName(c.name)]) continue;
       const key = matKey(c);
       if (!materials[key]) {
-        materials[key] = { id: mid(key), name: c.name, unit: c.unit, packQty: 1, packPrice: 0 };
+        materials[key] = { id: mid(key), code: c.code || "", name: c.name, unit: c.unit, packQty: 1, packPrice: 0 };
       }
+      if (!materials[key].code && c.code) materials[key].code = c.code;
       if (c.price > 0 && !(materials[key].packPrice > 0)) {
         materials[key].packQty = 1;
         materials[key].packPrice = c.price;
