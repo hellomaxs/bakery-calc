@@ -259,8 +259,8 @@ async function buildMenuPdfDoc(bg) {
   // геометрія
   const PILL_X = 66, PILL_W = 463;                 // таблетка: x=66..529
   const NAME_X = PILL_X + 24;
-  const PRICE_ZONE = 74;                            // місце під ціну справа
-  const NAME_MAX_W = PILL_W - 24 - PRICE_ZONE;
+  const CHIP_W = 80;                               // коричневий чип під ціну справа
+  const NAME_MAX_W = PILL_W - 24 - CHIP_W - 16;
   const PER_PAGE = 15;
   const ROWS_TOP = 132;
   const SLOT_H = (PAGE_H - ROWS_TOP - 40) / PER_PAGE;
@@ -303,15 +303,24 @@ async function buildMenuPdfDoc(bg) {
       const pillY = slotTop + (SLOT_H - pillH) / 2;
       const centerY = pillY + pillH / 2;
 
-      nodes.push({ canvas: [{ type: "rect", x: PILL_X, y: pillY, w: PILL_W, h: pillH, r: pillH / 2, color: "#FFFFFF", fillOpacity: 0.82 }], absolutePosition: { x: 0, y: 0 } });
+      nodes.push({ canvas: [{ type: "rect", x: PILL_X, y: pillY, w: PILL_W, h: pillH, r: pillH / 2, color: "#FFFFFF", fillOpacity: 0.85 }], absolutePosition: { x: 0, y: 0 } });
 
       let ny = centerY - (lines.length * LINE_H) / 2 - 1;
       lines.forEach(ln => {
-        nodes.push({ text: ln, absolutePosition: { x: NAME_X, y: ny }, width: NAME_MAX_W, color: "#3A2717", bold: true, fontSize: NAME_SIZE });
+        nodes.push({ text: ln, absolutePosition: { x: NAME_X, y: ny }, width: NAME_MAX_W, color: "#2E1E12", bold: true, fontSize: NAME_SIZE });
         ny += LINE_H;
       });
-      // ціна — вирівняна по вертикальному центру таблетки
-      nodes.push({ text: `${fmtNum(salePrice(p), 0)} ${c}`, absolutePosition: { x: PILL_X, y: centerY - PRICE_SIZE * 0.62 }, width: PILL_W - 30, alignment: "right", color: "#5A3418", bold: true, fontSize: PRICE_SIZE });
+      // ціна — на суцільному коричневому чипі справа (щоб не зливалась із фоном),
+      // білі жирні цифри, по вертикальному центру таблетки
+      const priceStr = `${fmtNum(salePrice(p), 0)} ${c}`;
+      const pw = measure(priceStr, PRICE_SIZE, true);
+      const chipW = Math.max(CHIP_W, pw + 22);        // чип під ширину ціни (мін. CHIP_W)
+      const chipH = Math.min(pillH - 8, 25);
+      const chipX = PILL_X + PILL_W - chipW - 8;
+      const chipY = centerY - chipH / 2;
+      nodes.push({ canvas: [{ type: "rect", x: chipX, y: chipY, w: chipW, h: chipH, r: 8, color: "#5A3418" }], absolutePosition: { x: 0, y: 0 } });
+      // ціну центруємо в чипі за виміряною шириною (alignment у absolutePosition ненадійний)
+      nodes.push({ text: priceStr, absolutePosition: { x: chipX + (chipW - pw) / 2, y: centerY - PRICE_SIZE * 0.6 }, color: "#FFFFFF", bold: true, fontSize: PRICE_SIZE });
     });
 
     if (pi > 0) nodes[0].pageBreak = "before";
