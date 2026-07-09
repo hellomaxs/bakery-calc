@@ -160,19 +160,41 @@ async function load() {
       if (base) { applyBase(base); maybeBackup(); return; }
     }
     if (changed) save();
-    maybeBackup();
+    syncWithCloud();  // подтянуть, если в облаке новее (правки с другого устройства)
     return;
   }
 
   // первый запуск / очищенный кеш: тянем актуальную базу
   const base = await fetchBase();
-  if (base) { applyBase(base); maybeBackup(); return; }
+  if (base) { applyBase(base); _lastFp = fp(state.data); maybeBackup(); return; }
   state.data = seedData(); save();  // офлайн-фолбэк — демо
 }
 
-/* Резервная копия базы на Vercel (/api/base): по изменениям, с дебаунсом.
-   Пишем только при реальном изменении данных (не демо, не пусто). */
-let _backupTimer = null, _lastBackupJson = "";
+/* Синхронизация с облаком: на открытии сравниваем метку изменения updatedAt.
+   Облако новее — принимаем; локальное новее — пушим. */
+function fp(d) {
+  const x = { ...d, settings: { ...(d.settings || {}) } };
+  delete x.settings.updatedAt; delete x.settings.lastBackup;
+  return JSON.stringify(x);
+}
+function syncWithCloud() {
+  fetchBase().then(cloud => {
+    if (!cloud || !Array.isArray(cloud.products)) return;
+    const localU = (state.data.settings && state.data.settings.updatedAt) || 0;
+    const cloudU = (cloud.settings && cloud.settings.updatedAt) || 0;
+    if (cloudU > localU) {
+      applyBase(cloud); _lastFp = fp(state.data);   // облако новее — принимаем
+      render();
+      toast("Синхронізовано з хмарою");
+    } else {
+      _lastFp = fp(cloud);       // локальное не старше — при отличии запушим
+      scheduleBackup();
+    }
+  }).catch(() => { scheduleBackup(); });
+}
+
+/* Резервная копия базы на Vercel (/api/base): по изменениям, с дебаунсом. */
+let _backupTimer = null, _lastFp = "";
 function scheduleBackup() {
   clearTimeout(_backupTimer);
   _backupTimer = setTimeout(doBackup, 2500);
@@ -181,18 +203,15 @@ function doBackup() {
   try {
     const s = state.data.settings || {};
     if (s.demo || looksLikeDemo(state.data) || !state.data.products.length) return;
-    const payload = JSON.stringify(state.data);
-    if (payload === _lastBackupJson) return;  // без изменений — не шлём
+    const cur = fp(state.data);
+    if (cur === _lastFp) return;  // реальных изменений нет — не шлём
+    state.data.settings.updatedAt = Date.now();  // метка последнего изменения
     fetch("/api/base", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-base-key": "zs_9f3b7a2e1c8d4056k" },
-      body: payload,
+      body: JSON.stringify(state.data),
     }).then(r => {
-      if (r.ok) {
-        state.data.settings.lastBackup = Date.now();
-        save();
-        _lastBackupJson = JSON.stringify(state.data); // чтобы не зациклиться на save()
-      }
+      if (r.ok) { _lastFp = cur; state.data.settings.lastBackup = Date.now(); save(); }
     }).catch(() => { /* нет сети — попробуем при следующем изменении */ });
   } catch (e) { /* игнор */ }
 }
