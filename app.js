@@ -176,7 +176,7 @@ const BACKUP_INTERVAL = 20 * 60 * 60 * 1000; // ~1 раз в сутки
 function maybeBackup() {
   try {
     const s = state.data.settings || {};
-    if (s.demo || !state.data.products.length) return;
+    if (s.demo || looksLikeDemo(state.data)) return;  // демо/пустое не бэкапим
     const now = Date.now();
     if (s.lastBackup && now - s.lastBackup < BACKUP_INTERVAL) return;
     fetch("/api/base", {

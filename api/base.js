@@ -35,6 +35,12 @@ export default async function handler(req, res) {
     if (!body || !Array.isArray(body.materials) || !Array.isArray(body.products) || body.products.length === 0) {
       return res.status(400).json({ error: "bad data" });
     }
+    // не даём демо-базе затирать реальную резервную копию
+    const SEED = ["Пиріжок з родзинками", "Какао на молоці", "Пирожок с изюмом", "Какао на молоке"];
+    if (body.settings && body.settings.demo) return res.status(409).json({ error: "demo, ignored" });
+    if (body.products.length <= 2 && body.products.every(p => SEED.includes(p.name))) {
+      return res.status(409).json({ error: "looks like demo, ignored" });
+    }
     try {
       await put(PATH, JSON.stringify(body), {
         access: "public",
