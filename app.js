@@ -610,7 +610,7 @@ function renderCards() {
   if (state.cardsFilter !== "all" && !cats.some(c => c.id === state.cardsFilter)) state.cardsFilter = "all";
 
   const top = `
-    <div class="stock-top">
+    <div class="cards-top">
       <div class="search-box">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
         <input class="input" id="cardsSearch" type="search" placeholder="Пошук по назві" value="${esc(state.cardsSearch)}" autocomplete="off">

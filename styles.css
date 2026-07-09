@@ -424,6 +424,10 @@ img { max-width: 100%; display: block; }
 .search-box .input { padding-left: 42px; border-radius: 14px; }
 .search-box input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .stock-top .chips { padding: 10px 0; }
+/* Тех карти: поиск+чипы прокручиваются вместе с контентом (не липнут),
+   залипает только полоса колонок .cols-head */
+.cards-top { padding-top: 6px; }
+.cards-top .chips { padding: 10px 0 6px; }
 .icon-chip { display: inline-flex; align-items: center; gap: 6px; }
 .icon-chip svg { flex: 0 0 auto; }
 
