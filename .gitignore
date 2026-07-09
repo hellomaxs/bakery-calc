@@ -4,3 +4,6 @@ data.json
 # временные файлы генерации
 _*.xlsx
 _test*
+
+.env*
+node_modules

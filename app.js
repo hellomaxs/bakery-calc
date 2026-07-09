@@ -100,48 +100,83 @@ function ensureGroups(data) {
   return changed;
 }
 
+/* Актуальная база: сначала облачная резервная копия (/api/base), затем
+   встроенная в деплой data.json. null — если ничего нет (офлайн/Pages). */
+async function fetchBase() {
+  for (const url of ["/api/base", "data.json"]) {
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (res.ok) {
+        const d = await res.json();
+        if (Array.isArray(d.materials) && Array.isArray(d.products)) return d;
+      }
+    } catch (e) { /* пробуем следующий источник */ }
+  }
+  return null;
+}
+function applyBase(d) {
+  state.data = d;
+  if (!state.data.settings) state.data.settings = { currency: "₴" };
+  delete state.data.settings.demo;
+  ensureGroups(state.data);
+  save();
+}
+
 async function load() {
+  let stored = null;
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (raw) {
-      state.data = JSON.parse(raw);
-      if (!state.data.settings) state.data.settings = { currency: "₴" };
-      let changed = ensureGroups(state.data);
-      // v2 групп: посуда/упаковка — переклассифицируем ранее авторазложенное в бакалею
-      if ((state.data.settings.groupsVer || 1) < 2) {
-        for (const m of state.data.materials) {
-          if (m.group === "grocery" && classifyMaterial(m.name) === "pack") m.group = "pack";
-        }
-        state.data.settings.groupsVer = 2;
-        changed = true;
+    if (raw) stored = JSON.parse(raw);
+  } catch (e) { /* повреждённые данные */ }
+
+  if (stored && Array.isArray(stored.products) && Array.isArray(stored.materials)) {
+    state.data = stored;
+    if (!state.data.settings) state.data.settings = { currency: "₴" };
+    let changed = ensureGroups(state.data);
+    // v2 групп: посуда/упаковка
+    if ((state.data.settings.groupsVer || 1) < 2) {
+      for (const m of state.data.materials) {
+        if (m.group === "grocery" && classifyMaterial(m.name) === "pack") m.group = "pack";
       }
-      // v2 UI: перехід на українську, валюта — гривня
-      if ((state.data.settings.uiVer || 1) < 2) {
-        state.data.settings.currency = "₴";
-        state.data.settings.uiVer = 2;
-        changed = true;
-      }
-      if (changed) save();
-      return;
+      state.data.settings.groupsVer = 2; changed = true;
     }
-  } catch (e) { /* повреждённые данные — начинаем заново */ }
-  // первый запуск: пробуем предзагруженную базу data.json (есть в деплое Vercel);
-  // если файла нет (напр. GitHub Pages) — демо-данные
+    // v2 UI: украинский + гривня
+    if ((state.data.settings.uiVer || 1) < 2) {
+      state.data.settings.currency = "₴"; state.data.settings.uiVer = 2; changed = true;
+    }
+    // если на устройстве осталась только демо-база — подтягиваем реальную (без демо)
+    if (state.data.settings.demo) {
+      const base = await fetchBase();
+      if (base) { applyBase(base); maybeBackup(); return; }
+    }
+    if (changed) save();
+    maybeBackup();
+    return;
+  }
+
+  // первый запуск / очищенный кеш: тянем актуальную базу
+  const base = await fetchBase();
+  if (base) { applyBase(base); maybeBackup(); return; }
+  state.data = seedData(); save();  // офлайн-фолбэк — демо
+}
+
+/* Ежедневная резервная копия базы на Vercel (/api/base). Пишется не чаще
+   раза в сутки при открытии; только реальные данные (не демо). */
+const BACKUP_INTERVAL = 20 * 60 * 60 * 1000; // ~1 раз в сутки
+function maybeBackup() {
   try {
-    const res = await fetch("data.json", { cache: "no-store" });
-    if (res.ok) {
-      const d = await res.json();
-      if (Array.isArray(d.materials) && Array.isArray(d.products)) {
-        state.data = d;
-        if (!state.data.settings) state.data.settings = { currency: "₴" };
-        ensureGroups(state.data);
-        save();
-        return;
-      }
-    }
-  } catch (e) { /* нет файла/сети — демо */ }
-  state.data = seedData();
-  save();
+    const s = state.data.settings || {};
+    if (s.demo || !state.data.products.length) return;
+    const now = Date.now();
+    if (s.lastBackup && now - s.lastBackup < BACKUP_INTERVAL) return;
+    fetch("/api/base", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-base-key": "zs_9f3b7a2e1c8d4056k" },
+      body: JSON.stringify(state.data),
+    }).then(r => {
+      if (r.ok) { state.data.settings.lastBackup = now; save(); }
+    }).catch(() => { /* нет сети/эндпоинта — тихо пропускаем */ });
+  } catch (e) { /* игнор */ }
 }
 function save() {
   localStorage.setItem(LS_KEY, JSON.stringify(state.data));
@@ -165,7 +200,7 @@ function seedData() {
   };
   const c = (mat, brutto, netto) => ({ materialId: mat.id, brutto, netto });
   return {
-    settings: { currency: "₴" },
+    settings: { currency: "₴", demo: true },
     materials: Object.values(mats),
     products: [
       {
@@ -1005,7 +1040,6 @@ function renderStock() {
       <p style="margin-top:14px">Імпорт</p>
       <div class="btns">
         <button class="btn ghost small" data-import-xlsx>Excel</button>
-        <button class="btn ghost small" data-load-base>База ЖИТО-СИТО</button>
       </div>
       <p style="margin-top:14px">Дані зберігаються на цьому пристрої · валюта ₴</p>
       <input type="file" id="importXlsxInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
@@ -1247,19 +1281,6 @@ document.getElementById("view").addEventListener("click", e => {
     return;
   }
   if (e.target.closest("[data-import-xlsx]")) { document.getElementById("importXlsxInput").click(); return; }
-  if (e.target.closest("[data-load-base]")) {
-    fetch("data.json", { cache: "no-store" })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => {
-        if (!Array.isArray(d.materials) || !Array.isArray(d.products)) return;
-        if (!confirm(`Завантажити базу ЖИТО-СИТО?\n(${d.materials.length} сировини, ${d.products.length} виробів)\nПоточні дані буде замінено.`)) return;
-        if (!d.settings) d.settings = { currency: "₴" };
-        state.data = d; ensureGroups(state.data); save(); render();
-        toast("Базу завантажено");
-      })
-      .catch(() => toast("Базу не знайдено (доступна лише в застосунку)"));
-    return;
-  }
 });
 
 document.getElementById("view").addEventListener("input", e => {

@@ -1,4 +1,6 @@
 .vercel
 .git
+node_modules
+.env*
 _*.xlsx
 _test*
