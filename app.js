@@ -501,50 +501,29 @@ function switchTab(tab) {
 
 function render() {
   const view = document.getElementById("view");
-  if (state.tab === "vitrina") { view.innerHTML = renderVitrina(); ensurePhotos(); }
+  if (state.tab === "vitrina") view.innerHTML = renderVitrina();
   else if (state.tab === "cards") view.innerHTML = renderCards();
   else view.innerHTML = renderStock();
 }
 
-/* ===== v2: авто-генерация фото изделий через /api/photo (OpenAI gpt-image-2) ===== */
-const photoQueue = { pending: [], busy: false, tried: new Set() };
-function ensurePhotos() {
-  if (state.data.settings && state.data.settings.autoPhotos === false) return;
-  for (const p of state.data.products) {
-    if (p.onDisplay && !p.photo && !photoQueue.tried.has(p.id)) {
-      photoQueue.tried.add(p.id);
-      photoQueue.pending.push(p.id);
-    }
-  }
-  drainPhotoQueue();
-}
-function setPhotoLoading(id, on) {
-  const ph = document.querySelector(`[data-photo-ph="${id}"]`);
-  if (ph) ph.classList.toggle("gen", on);
-}
-function drainPhotoQueue() {
-  if (photoQueue.busy) return;
-  const id = photoQueue.pending.shift();
-  if (!id) return;
+/* ===== v2: генерация фото изделия по кнопке (OpenAI gpt-image-2, вертикальное) ===== */
+const photoGenBusy = new Set();
+function generatePhoto(id) {
+  if (photoGenBusy.has(id)) return Promise.resolve(null);
   const p = productById(id);
-  if (!p || p.photo) { drainPhotoQueue(); return; }
-  photoQueue.busy = true;
-  setPhotoLoading(id, true);
-  fetch("/api/photo", {
+  if (!p) return Promise.resolve(null);
+  photoGenBusy.add(id);
+  return fetch("/api/photo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: p.name, category: p.category }),
   })
     .then(r => r.ok ? r.json() : Promise.reject(r.status))
     .then(d => {
-      if (d && d.url) {
-        p.photo = d.url; save();
-        const ph = document.querySelector(`[data-photo-ph="${id}"]`);
-        if (ph) ph.outerHTML = `<img class="photo" src="${d.url}" alt="${esc(p.name)}">`;
-      }
+      if (d && d.url) { p.photo = d.url; save(); maybeBackup(); return d.url; }
+      return null;
     })
-    .catch(() => { photoQueue.tried.delete(id); /* дать повтор при след. открытии */ })
-    .finally(() => { setPhotoLoading(id, false); photoQueue.busy = false; setTimeout(drainPhotoQueue, 500); });
+    .finally(() => photoGenBusy.delete(id));
 }
 
 /* ================== Витрина ================== */
@@ -594,23 +573,29 @@ function renderVitrina() {
   }).join("") + `</div>`;
 }
 
+const aiIcon = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.2L18 9l-4.4 1.8L12 15l-1.6-4.2L6 9l4.4-1.8L12 3z"/><path d="M19 14l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2z"/></svg>`;
+
+function photoInner(p) {
+  return p.photo
+    ? `<img class="pv-photo" src="${p.photo}" alt="${esc(p.name)}">`
+    : `<div class="pv-photo-ph">${placeholderSvg(p.category, 64)}</div>`;
+}
+
 function openProductView(id) {
   const p = productById(id);
   if (!p) return;
   const w = prodYield(p);
-  const photo = p.photo
-    ? `<img class="pv-photo" src="${p.photo}" alt="${esc(p.name)}">`
-    : `<div class="pv-photo-ph">${placeholderSvg(p.category, 64)}</div>`;
   const ingredients = p.components.map(comp => {
     const ref = compRef(comp);
     if (!ref) return "";
     return `<div class="ing"><span>${esc(ref.name)}</span><span class="qty">${fmtNum(comp.brutto)} ${ref.unit}</span></div>`;
   }).join("");
 
-  openSheet(`
+  const overlay = openSheet(`
     <div class="sheet-header"><h2>${esc(p.name)}</h2>${closeBtnHtml}</div>
     <div class="sheet-body">
-      ${photo}
+      <div class="pv-photo-wrap" id="pvPhoto">${photoInner(p)}</div>
+      <button class="btn ghost small block" id="pvGen" style="margin:10px 0 4px">${aiIcon}<span>${p.photo ? "Оновити AI фото" : "Згенерувати AI фото"}</span></button>
       <div class="pv-meta">
         <span class="price">${fmtNum(salePrice(p), 0)} ${cur()}</span>
         <span class="weight">Вихід: ${fmtYield(w)}</span>
@@ -619,6 +604,26 @@ function openProductView(id) {
       <div class="ingr-list">${ingredients || '<div class="ing"><span>Склад не заповнений</span></div>'}</div>
       <div style="height:20px"></div>
     </div>`);
+
+  const $ = sel => overlay.querySelector(sel);
+  $("#pvGen").addEventListener("click", () => {
+    const btn = $("#pvGen"), wrap = $("#pvPhoto");
+    if (btn.disabled) return;
+    btn.disabled = true;
+    wrap.classList.add("gen");
+    btn.innerHTML = `<span class="spin"></span><span>Генерую… ~1 хв</span>`;
+    generatePhoto(id)
+      .then(url => {
+        if (url) { wrap.innerHTML = photoInner(p); render(); toast("Фото готове"); }
+        else toast("Не вдалося згенерувати фото");
+      })
+      .catch(() => toast("Помилка генерації (потрібен інтернет)"))
+      .finally(() => {
+        wrap.classList.remove("gen");
+        btn.disabled = false;
+        btn.innerHTML = `${aiIcon}<span>${p.photo ? "Оновити AI фото" : "Згенерувати AI фото"}</span>`;
+      });
+  });
 }
 
 /* ================== Тех карты ================== */
