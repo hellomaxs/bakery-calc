@@ -508,7 +508,16 @@ function render() {
 
 /* ===== v2: генерация фото изделия по кнопке (OpenAI gpt-image-2, вертикальное) ===== */
 const photoGenBusy = new Set();
-function generatePhoto(id) {
+/* Компоненты как подсказка для промпта (начинка/посыпка/включения), без тары */
+function productIngredients(p) {
+  const names = [];
+  for (const c of p.components) {
+    if (c.productId) { const sub = productById(c.productId); if (sub) names.push(sub.name); }
+    else if (c.materialId) { const m = matById(c.materialId); if (m && matGroup(m) !== "pack") names.push(m.name); }
+  }
+  return [...new Set(names)];
+}
+function generatePhoto(id, force) {
   if (photoGenBusy.has(id)) return Promise.resolve(null);
   const p = productById(id);
   if (!p) return Promise.resolve(null);
@@ -516,7 +525,7 @@ function generatePhoto(id) {
   return fetch("/api/photo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: p.name, category: p.category }),
+    body: JSON.stringify({ name: p.name, category: p.category, ingredients: productIngredients(p), force: !!force }),
   })
     .then(r => r.ok ? r.json() : Promise.reject(r.status))
     .then(d => {
@@ -609,10 +618,11 @@ function openProductView(id) {
   $("#pvGen").addEventListener("click", () => {
     const btn = $("#pvGen"), wrap = $("#pvPhoto");
     if (btn.disabled) return;
+    const force = !!p.photo;  // фото уже есть -> «Оновити» перегенерирует
     btn.disabled = true;
     wrap.classList.add("gen");
     btn.innerHTML = `<span class="spin"></span><span>Генерую… ~1 хв</span>`;
-    generatePhoto(id)
+    generatePhoto(id, force)
       .then(url => {
         if (url) { wrap.innerHTML = photoInner(p); render(); toast("Фото готове"); }
         else toast("Не вдалося згенерувати фото");

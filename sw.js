@@ -1,4 +1,4 @@
-const CACHE = "bakery-calc-v25";
+const CACHE = "bakery-calc-v26";
 const ASSETS = [
   "./",
   "./index.html",

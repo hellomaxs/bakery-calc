@@ -7,19 +7,30 @@ function keyFor(name, category) {
   const s = (category || "") + "|" + (name || "");
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
-  return "photos/v2/" + h.toString(36) + ".jpg";
+  return "photos/v3/" + h.toString(36) + ".jpg";
 }
 
-function buildPrompt(name, category) {
-  const subject = category === "drinks"
-    ? `a freshly served "${name}" drink in a nice cup or glass`
-    : `a single freshly baked "${name}" (Ukrainian bakery / pastry item)`;
+function buildPrompt(name, category, ingredients) {
+  const ing = (ingredients || []).filter(Boolean).slice(0, 12).join(", ");
+  const hint = ing
+    ? ` Components to reflect where naturally visible (filling, toppings, inclusions, dusting, glaze): ${ing}.`
+    : "";
+  if (category === "drinks") {
+    return (
+      `High quality natural photograph of a freshly served "${name}" drink in a nice cup or glass ` +
+      `on a natural brown wooden board, warm cozy bakery lighting, 45-degree angle, ` +
+      `vertical portrait composition, appetizing, realistic professional food photography, ` +
+      `shallow depth of field, no text, no hands, no labels.${hint}`
+    );
+  }
   return (
-    `High quality natural photograph of ${subject}, ` +
-    `on a natural brown wooden board / cutting board, warm cozy bakery lighting, ` +
-    `shot from a 45-degree isometric angle showing the whole item, ` +
-    `vertical portrait composition, appetizing, professional food photography, ` +
-    `shallow depth of field, realistic, no text, no hands, no labels, no packaging.`
+    `High quality natural photograph of a Ukrainian bakery item "${name}". ` +
+    `On one vertical photo place TWO pieces together on a natural brown wooden board: ` +
+    `(1) one whole "${name}", and (2) one half of it broken open with the torn cross-section ` +
+    `and inside/filling facing the viewer to reveal the texture and filling.${hint} ` +
+    `Warm cozy bakery lighting, 45-degree isometric angle showing the whole items, ` +
+    `vertical portrait composition, appetizing, realistic professional food photography, ` +
+    `shallow depth of field, no text, no hands, no labels, no packaging.`
   );
 }
 
@@ -34,13 +45,17 @@ export default async function handler(req, res) {
   if (typeof body === "string") { try { body = JSON.parse(body); } catch { body = null; } }
   const name = body && String(body.name || "").trim();
   const category = body && String(body.category || "").trim();
+  const ingredients = body && Array.isArray(body.ingredients) ? body.ingredients : [];
+  const force = body && body.force === true;
   if (!name) return res.status(400).json({ error: "no name" });
 
   const path = keyFor(name, category);
 
-  // уже сгенерировано — отдаём из кеша
-  const existing = await head(path).catch(() => null);
-  if (existing) return res.status(200).json({ url: existing.url, cached: true });
+  // уже сгенерировано — отдаём из кеша (кроме принудительной перегенерации)
+  if (!force) {
+    const existing = await head(path).catch(() => null);
+    if (existing) return res.status(200).json({ url: existing.url, cached: true });
+  }
 
   const KEY = String(process.env.OPENAI_API_KEY || "").trim();
   if (!KEY) return res.status(500).json({ error: "no OPENAI_API_KEY" });
@@ -49,7 +64,7 @@ export default async function handler(req, res) {
     const r = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${KEY}` },
-      body: JSON.stringify({ model: "gpt-image-2", prompt: buildPrompt(name, category), size: "1024x1536", quality: "medium", n: 1 }),
+      body: JSON.stringify({ model: "gpt-image-2", prompt: buildPrompt(name, category, ingredients), size: "1024x1536", quality: "medium", n: 1 }),
     });
     const j = await r.json();
     if (!r.ok) return res.status(502).json({ error: (j.error && j.error.message) || "openai error" });
@@ -59,7 +74,8 @@ export default async function handler(req, res) {
     const blob = await put(path, jpg, {
       access: "public", contentType: "image/jpeg", addRandomSuffix: false, allowOverwrite: true,
     });
-    return res.status(200).json({ url: blob.url });
+    // при перегенерации меняем URL (?t=), чтобы <img> обновился
+    return res.status(200).json({ url: force ? blob.url + "?t=" + Date.now() : blob.url });
   } catch (e) {
     return res.status(500).json({ error: String((e && e.message) || e) });
   }
