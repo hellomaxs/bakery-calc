@@ -27,7 +27,7 @@
   #splashLogo {
     height: 56vh; max-width: 74vw; width: auto; object-fit: contain;
     transform: scale(.55); opacity: 0;
-    animation: splashZoom 3s cubic-bezier(.2, .7, .2, 1) forwards;
+    animation: splashZoom 2s cubic-bezier(.2, .7, .2, 1) forwards;
   }
   @keyframes splashZoom {
     0%   { transform: scale(.55); opacity: 0; }
@@ -48,8 +48,8 @@
 <script>
   setTimeout(function () {
     var s = document.getElementById("splash");
-    if (s) { s.classList.add("done"); setTimeout(function () { s.remove(); }, 480); }
-  }, 2700);
+    if (s) { s.classList.add("done"); setTimeout(function () { s.remove(); }, 380); }
+  }, 1800);
 </script>
 
 <header class="app-header">
