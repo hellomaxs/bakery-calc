@@ -122,6 +122,16 @@ function applyBase(d) {
   save();
 }
 
+/* Похоже на демо/пустую базу (в т.ч. сохранённую до появления флага demo) —
+   тогда её можно заменить реальной базой без риска затереть данные пользователя. */
+const SEED_NAMES = ["Пиріжок з родзинками", "Какао на молоці", "Пирожок с изюмом", "Какао на молоке"];
+function looksLikeDemo(d) {
+  if (!d || !Array.isArray(d.products)) return true;
+  if (d.products.length === 0) return true;
+  if (d.products.length <= 2 && d.products.every(p => SEED_NAMES.includes(p.name))) return true;
+  return false;
+}
+
 async function load() {
   let stored = null;
   try {
@@ -144,8 +154,8 @@ async function load() {
     if ((state.data.settings.uiVer || 1) < 2) {
       state.data.settings.currency = "₴"; state.data.settings.uiVer = 2; changed = true;
     }
-    // если на устройстве осталась только демо-база — подтягиваем реальную (без демо)
-    if (state.data.settings.demo) {
+    // если на устройстве осталась только демо/пустая база — подтягиваем реальную
+    if (state.data.settings.demo || looksLikeDemo(state.data)) {
       const base = await fetchBase();
       if (base) { applyBase(base); maybeBackup(); return; }
     }
