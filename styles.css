@@ -118,6 +118,10 @@ img { max-width: 100%; display: block; }
 .chips { display: flex; gap: 8px; padding: 8px 0 14px; overflow-x: auto; scrollbar-width: none; }
 .chips.wrap { flex-wrap: wrap; overflow: visible; padding: 0; }
 .chips::-webkit-scrollbar { display: none; }
+/* На компьютере/широком экране чипы категорий — по центру, с переносом, без прокрутки */
+@media (min-width: 560px) {
+  .chips { justify-content: center; flex-wrap: wrap; overflow-x: visible; }
+}
 .chip {
   padding: 8px 16px; min-height: 38px;
   border: 1px solid var(--line); border-radius: 999px;
