@@ -7,3 +7,6 @@ _test*
 
 .env*
 node_modules
+_batch.json
+_photos.json
+package-lock.json

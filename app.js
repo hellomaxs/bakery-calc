@@ -501,9 +501,50 @@ function switchTab(tab) {
 
 function render() {
   const view = document.getElementById("view");
-  if (state.tab === "vitrina") view.innerHTML = renderVitrina();
+  if (state.tab === "vitrina") { view.innerHTML = renderVitrina(); ensurePhotos(); }
   else if (state.tab === "cards") view.innerHTML = renderCards();
   else view.innerHTML = renderStock();
+}
+
+/* ===== v2: авто-генерация фото изделий через /api/photo (OpenAI gpt-image-2) ===== */
+const photoQueue = { pending: [], busy: false, tried: new Set() };
+function ensurePhotos() {
+  if (state.data.settings && state.data.settings.autoPhotos === false) return;
+  for (const p of state.data.products) {
+    if (p.onDisplay && !p.photo && !photoQueue.tried.has(p.id)) {
+      photoQueue.tried.add(p.id);
+      photoQueue.pending.push(p.id);
+    }
+  }
+  drainPhotoQueue();
+}
+function setPhotoLoading(id, on) {
+  const ph = document.querySelector(`[data-photo-ph="${id}"]`);
+  if (ph) ph.classList.toggle("gen", on);
+}
+function drainPhotoQueue() {
+  if (photoQueue.busy) return;
+  const id = photoQueue.pending.shift();
+  if (!id) return;
+  const p = productById(id);
+  if (!p || p.photo) { drainPhotoQueue(); return; }
+  photoQueue.busy = true;
+  setPhotoLoading(id, true);
+  fetch("/api/photo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: p.name, category: p.category }),
+  })
+    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+    .then(d => {
+      if (d && d.url) {
+        p.photo = d.url; save();
+        const ph = document.querySelector(`[data-photo-ph="${id}"]`);
+        if (ph) ph.outerHTML = `<img class="photo" src="${d.url}" alt="${esc(p.name)}">`;
+      }
+    })
+    .catch(() => { photoQueue.tried.delete(id); /* дать повтор при след. открытии */ })
+    .finally(() => { setPhotoLoading(id, false); photoQueue.busy = false; setTimeout(drainPhotoQueue, 500); });
 }
 
 /* ================== Витрина ================== */
@@ -538,7 +579,7 @@ function renderVitrina() {
     const w = productWeight(p);
     const photo = p.photo
       ? `<img class="photo" src="${p.photo}" alt="${esc(p.name)}">`
-      : `<div class="photo-ph">${placeholderSvg(p.category, 48)}</div>`;
+      : `<div class="photo-ph" data-photo-ph="${p.id}">${placeholderSvg(p.category, 48)}</div>`;
     return `
       <button class="card" data-open-product="${p.id}">
         ${photo}
