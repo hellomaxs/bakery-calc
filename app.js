@@ -522,10 +522,13 @@ function generatePhoto(id, force) {
   const p = productById(id);
   if (!p) return Promise.resolve(null);
   photoGenBusy.add(id);
+  // референс — фото, загруженное пользователем (data URI): srcPhoto или сам photo
+  const ref = (p.srcPhoto && p.srcPhoto.startsWith("data:")) ? p.srcPhoto
+    : (p.photo && p.photo.startsWith("data:")) ? p.photo : null;
   return fetch("/api/photo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: p.name, category: p.category, ingredients: productIngredients(p), force: !!force }),
+    body: JSON.stringify({ name: p.name, category: p.category, ingredients: productIngredients(p), force: !!force, image: ref || undefined }),
   })
     .then(r => r.ok ? r.json() : Promise.reject(r.status))
     .then(d => {
@@ -911,12 +914,14 @@ function openProductEditor(id) {
 
   // Фото
   $("#pPhotoBtn").addEventListener("click", () => $("#pPhotoInput").click());
-  $("#pPhotoDel").addEventListener("click", () => { draft.photo = null; renderPhoto(); });
+  $("#pPhotoDel").addEventListener("click", () => { draft.photo = null; draft.srcPhoto = null; renderPhoto(); });
   $("#pPhotoInput").addEventListener("change", async e => {
     const file = e.target.files[0];
     if (!file) return;
     try {
-      draft.photo = await resizeImage(file, 640);
+      const dataUrl = await resizeImage(file, 768);
+      draft.photo = dataUrl;
+      draft.srcPhoto = dataUrl; // референс для AI-генерації на вітрині
       renderPhoto();
     } catch { toast("Не вдалося завантажити фото"); }
     e.target.value = "";

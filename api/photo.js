@@ -10,10 +10,13 @@ function keyFor(name, category) {
   return "photos/v4/" + h.toString(36) + ".jpg";
 }
 
-function buildPrompt(name, category, ingredients) {
+function buildPrompt(name, category, ingredients, hasRef) {
   const ing = (ingredients || []).filter(Boolean).slice(0, 12).join(", ");
   const hint = ing
     ? ` Components to reflect where naturally visible (filling, toppings, inclusions, dusting, glaze): ${ing}.`
+    : "";
+  const ref = hasRef
+    ? `Use the provided reference photo as the ground truth for this product's real shape, colour, size, toppings and filling — keep them faithful. `
     : "";
   const framing =
     ` Medium/wide shot with the food kept small-to-medium in the frame and centered, ` +
@@ -22,6 +25,7 @@ function buildPrompt(name, category, ingredients) {
     `arranged compactly near the center so that even a centered square crop still shows a complete item.`;
   if (category === "drinks") {
     return (
+      ref +
       `High quality natural photograph of a freshly served "${name}" drink in a nice cup or glass ` +
       `on a natural brown wooden board, warm cozy bakery lighting, 45-degree angle, ` +
       `vertical portrait composition, appetizing, realistic professional food photography, ` +
@@ -29,6 +33,7 @@ function buildPrompt(name, category, ingredients) {
     );
   }
   return (
+    ref +
     `High quality natural photograph of a Ukrainian bakery item "${name}". ` +
     `On one vertical photo place TWO pieces close together near the center on a natural brown wooden board: ` +
     `(1) one whole "${name}", and (2) one half of it broken open with the torn cross-section ` +
@@ -52,12 +57,14 @@ export default async function handler(req, res) {
   const category = body && String(body.category || "").trim();
   const ingredients = body && Array.isArray(body.ingredients) ? body.ingredients : [];
   const force = body && body.force === true;
+  const image = body && typeof body.image === "string" && body.image.startsWith("data:") ? body.image : null;
   if (!name) return res.status(400).json({ error: "no name" });
 
   const path = keyFor(name, category);
 
-  // уже сгенерировано — отдаём из кеша (кроме принудительной перегенерации)
-  if (!force) {
+  // если есть референс-фото пользователя — всегда генерим заново по нему;
+  // без референса и без force — отдаём из кеша
+  if (!image && !force) {
     const existing = await head(path).catch(() => null);
     if (existing) return res.status(200).json({ url: existing.url, cached: true });
   }
@@ -65,12 +72,30 @@ export default async function handler(req, res) {
   const KEY = String(process.env.OPENAI_API_KEY || "").trim();
   if (!KEY) return res.status(500).json({ error: "no OPENAI_API_KEY" });
 
+  const prompt = buildPrompt(name, category, ingredients, !!image);
   try {
-    const r = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${KEY}` },
-      body: JSON.stringify({ model: "gpt-image-2", prompt: buildPrompt(name, category, ingredients), size: "1024x1536", quality: "medium", n: 1 }),
-    });
+    let r;
+    if (image) {
+      // image-to-image: фото пользователя как референс + текстовый промпт (images/edits)
+      const mm = image.match(/^data:(image\/[\w.+-]+);base64,([\s\S]+)$/);
+      const mime = mm ? mm[1] : "image/jpeg";
+      const buf = Buffer.from(mm ? mm[2] : "", "base64");
+      const form = new FormData();
+      form.append("model", "gpt-image-2");
+      form.append("prompt", prompt);
+      form.append("size", "1024x1536");
+      form.append("quality", "medium");
+      form.append("image", new Blob([buf], { type: mime }), "src." + (mime.split("/")[1] || "jpg"));
+      r = await fetch("https://api.openai.com/v1/images/edits", {
+        method: "POST", headers: { Authorization: `Bearer ${KEY}` }, body: form,
+      });
+    } else {
+      r = await fetch("https://api.openai.com/v1/images/generations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${KEY}` },
+        body: JSON.stringify({ model: "gpt-image-2", prompt, size: "1024x1536", quality: "medium", n: 1 }),
+      });
+    }
     const j = await r.json();
     if (!r.ok) return res.status(502).json({ error: (j.error && j.error.message) || "openai error" });
 
@@ -79,8 +104,8 @@ export default async function handler(req, res) {
     const blob = await put(path, jpg, {
       access: "public", contentType: "image/jpeg", addRandomSuffix: false, allowOverwrite: true,
     });
-    // при перегенерации меняем URL (?t=), чтобы <img> обновился
-    return res.status(200).json({ url: force ? blob.url + "?t=" + Date.now() : blob.url });
+    // при перегенерации / по референсу меняем URL (?t=), чтобы <img> обновился
+    return res.status(200).json({ url: (force || image) ? blob.url + "?t=" + Date.now() : blob.url });
   } catch (e) {
     return res.status(500).json({ error: String((e && e.message) || e) });
   }
