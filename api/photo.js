@@ -7,7 +7,7 @@ function keyFor(name, category) {
   const s = (category || "") + "|" + (name || "");
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
-  return "photos/v3/" + h.toString(36) + ".jpg";
+  return "photos/v4/" + h.toString(36) + ".jpg";
 }
 
 function buildPrompt(name, category, ingredients) {
@@ -15,22 +15,27 @@ function buildPrompt(name, category, ingredients) {
   const hint = ing
     ? ` Components to reflect where naturally visible (filling, toppings, inclusions, dusting, glaze): ${ing}.`
     : "";
+  const framing =
+    ` Medium/wide shot with the food kept small-to-medium in the frame and centered, ` +
+    `with generous empty margin and plenty of wooden board visible around it on all sides; ` +
+    `do NOT fill the frame edge-to-edge; the entire item must be fully visible and not cropped, ` +
+    `arranged compactly near the center so that even a centered square crop still shows a complete item.`;
   if (category === "drinks") {
     return (
       `High quality natural photograph of a freshly served "${name}" drink in a nice cup or glass ` +
       `on a natural brown wooden board, warm cozy bakery lighting, 45-degree angle, ` +
       `vertical portrait composition, appetizing, realistic professional food photography, ` +
-      `shallow depth of field, no text, no hands, no labels.${hint}`
+      `shallow depth of field, no text, no hands, no labels.${hint}${framing}`
     );
   }
   return (
     `High quality natural photograph of a Ukrainian bakery item "${name}". ` +
-    `On one vertical photo place TWO pieces together on a natural brown wooden board: ` +
+    `On one vertical photo place TWO pieces close together near the center on a natural brown wooden board: ` +
     `(1) one whole "${name}", and (2) one half of it broken open with the torn cross-section ` +
     `and inside/filling facing the viewer to reveal the texture and filling.${hint} ` +
     `Warm cozy bakery lighting, 45-degree isometric angle showing the whole items, ` +
     `vertical portrait composition, appetizing, realistic professional food photography, ` +
-    `shallow depth of field, no text, no hands, no labels, no packaging.`
+    `shallow depth of field, no text, no hands, no labels, no packaging.${framing}`
   );
 }
 
