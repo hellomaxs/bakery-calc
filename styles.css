@@ -439,10 +439,11 @@ img { max-width: 100%; display: block; }
 }
 .mat-row { display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .mat-row .ic {
-  width: 44px; height: 44px; flex: 0 0 44px; border-radius: 12px;
+  width: 40px; height: 40px; flex: 0 0 40px;
   display: flex; align-items: center; justify-content: center;
-  background: var(--primary-soft); color: var(--primary); font-weight: 700; font-size: 16px;
+  color: var(--primary);
 }
+.mat-row .ic svg { width: 30px; height: 30px; }
 .backup { margin-top: 28px; text-align: center; }
 .backup .btns { display: flex; gap: 10px; justify-content: center; margin-top: 10px; }
 .backup p { font-size: 12.5px; color: var(--text-2); margin: 0; }
