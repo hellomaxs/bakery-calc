@@ -170,26 +170,36 @@ async function load() {
   state.data = seedData(); save();  // офлайн-фолбэк — демо
 }
 
-/* Ежедневная резервная копия базы на Vercel (/api/base). Пишется не чаще
-   раза в сутки при открытии; только реальные данные (не демо). */
-const BACKUP_INTERVAL = 20 * 60 * 60 * 1000; // ~1 раз в сутки
-function maybeBackup() {
+/* Резервная копия базы на Vercel (/api/base): по изменениям, с дебаунсом.
+   Пишем только при реальном изменении данных (не демо, не пусто). */
+let _backupTimer = null, _lastBackupJson = "";
+function scheduleBackup() {
+  clearTimeout(_backupTimer);
+  _backupTimer = setTimeout(doBackup, 2500);
+}
+function doBackup() {
   try {
     const s = state.data.settings || {};
-    if (s.demo || looksLikeDemo(state.data)) return;  // демо/пустое не бэкапим
-    const now = Date.now();
-    if (s.lastBackup && now - s.lastBackup < BACKUP_INTERVAL) return;
+    if (s.demo || looksLikeDemo(state.data) || !state.data.products.length) return;
+    const payload = JSON.stringify(state.data);
+    if (payload === _lastBackupJson) return;  // без изменений — не шлём
     fetch("/api/base", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-base-key": "zs_9f3b7a2e1c8d4056k" },
-      body: JSON.stringify(state.data),
+      body: payload,
     }).then(r => {
-      if (r.ok) { state.data.settings.lastBackup = now; save(); }
-    }).catch(() => { /* нет сети/эндпоинта — тихо пропускаем */ });
+      if (r.ok) {
+        state.data.settings.lastBackup = Date.now();
+        save();
+        _lastBackupJson = JSON.stringify(state.data); // чтобы не зациклиться на save()
+      }
+    }).catch(() => { /* нет сети — попробуем при следующем изменении */ });
   } catch (e) { /* игнор */ }
 }
+function maybeBackup() { scheduleBackup(); }  // совместимость со старыми вызовами
 function save() {
   localStorage.setItem(LS_KEY, JSON.stringify(state.data));
+  scheduleBackup();
 }
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);

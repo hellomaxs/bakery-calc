@@ -15,9 +15,11 @@ export default async function handler(req, res) {
     try {
       const info = await head(PATH).catch(() => null);
       if (!info) return res.status(404).json({ error: "no backup" });
-      const r = await fetch(info.url, { cache: "no-store" });
+      // обход CDN-кеша: уникальный query, чтобы читать свежую версию блоба
+      const r = await fetch(info.url + (info.url.includes("?") ? "&" : "?") + "cb=" + Date.now(), { cache: "no-store" });
       if (!r.ok) return res.status(404).json({ error: "no backup" });
       const data = await r.json();
+      res.setHeader("Cache-Control", "no-store");
       return res.status(200).json(data);
     } catch (e) {
       return res.status(500).json({ error: String((e && e.message) || e) });
@@ -47,6 +49,7 @@ export default async function handler(req, res) {
         contentType: "application/json",
         addRandomSuffix: false,
         allowOverwrite: true,
+        cacheControlMaxAge: 0, // мутабельный блоб — не кешировать в CDN
       });
       return res.status(200).json({ ok: true, products: body.products.length, materials: body.materials.length });
     } catch (e) {
