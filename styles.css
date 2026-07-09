@@ -311,6 +311,18 @@ img { max-width: 100%; display: block; }
 .sheet-footer .btn { flex: 1; }
 @keyframes slideUp { from { transform: translateY(40px); opacity: .6; } to { transform: none; opacity: 1; } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalIn { from { transform: scale(.96); opacity: 0; } to { transform: none; opacity: 1; } }
+/* На компьютере/широком экране шторки открываются модалкой по центру, а не на весь экран */
+@media (min-width: 640px) {
+  .overlay { justify-content: center; align-items: center; padding: 24px; }
+  .sheet {
+    max-width: 480px; width: 100%;
+    border-radius: 20px;
+    max-height: min(88dvh, 780px);
+    box-shadow: 0 20px 60px rgba(20, 12, 5, .35);
+    animation: modalIn .2s cubic-bezier(.2, .9, .3, 1);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
